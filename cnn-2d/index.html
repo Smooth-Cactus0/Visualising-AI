@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>CNN explorer — what a convolution actually does</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<link rel="stylesheet" href="../ui/terms.css">
 <style>
 :root{
   box-sizing:border-box;
@@ -86,13 +87,6 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .bars .v{font-family:var(--mono);font-size:12px;color:var(--ink2);min-width:3.5em;text-align:right}
 .rfout{font-size:13.5px;margin-top:4px;min-height:1.6em}
 .rfout b{font-weight:600}
-dfn{font-style:normal;text-decoration:underline dotted var(--accent);text-underline-offset:3px;cursor:help;color:inherit}
-dfn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-#tip{position:fixed;z-index:9;max-width:320px;background:var(--ink);color:var(--bg);font-size:13px;line-height:1.45;padding:9px 12px;border-radius:7px;pointer-events:none;display:none;box-shadow:0 4px 18px rgba(0,0,0,.25)}
-#tip b{display:block;font-weight:600;margin-bottom:2px}
-.gloss{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px 26px;font-size:14px}
-.gloss div{padding:6px 0;border-bottom:1px solid var(--line2)}
-.gloss b{font-weight:600}
 .ledger{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;margin:4px 0 14px;font-size:13px;color:var(--ink2)}
 .ledger .p{min-width:120px}
 .ledger .p b{display:block;color:var(--ink);font-weight:600;font-size:14px}
@@ -124,7 +118,7 @@ dfn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
     <div class="col">
       <div class="ctrls">
         <label class="ctl">stride <select id="stride"><option>1</option><option>2</option><option>3</option></select></label>
-        <label class="ctl">padding <select id="pad"><option>0</option><option>1</option><option>2</option></select></label>
+        <label class="ctl">padding <select id="pad"><option>0</option><option selected>1</option><option>2</option></select></label>
         <label class="ctl">dilation <select id="dil"><option>1</option><option>2</option></select></label>
       </div>
       <div class="math" id="shapeMath"></div>
@@ -221,6 +215,7 @@ dfn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
 <script type="module">
 import { K, outSize, forward as forwardCore, footprint as footprintCore, kernelPresets, defaultBank, inputPresets } from '../core/cnn.js';
+import { installTerms } from '../ui/terms.js';
 const N = 16, C1 = 4, C2 = 8, NC = 10;
 const $ = id => document.getElementById(id);
 
@@ -478,56 +473,7 @@ $('poolAvg').onclick=()=>{ poolMode='avg'; $('poolAvg').classList.add('sel'); $(
   cv.addEventListener('pointerleave',()=>{ if(probe){probe=null;renderAll();} }); });
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',renderAll);
 
-// ---------- terms ----------
-const TERMS = [
-  ['kernel', /\bkernel\b/i, 'Kernel (filter)', 'A small grid of weights, 3×3 here, that is slid over the input. Its values are learned parameters: training changes them. Each kernel produces one feature map.'],
-  ['weights', /\bweights\b/i, 'Weights / parameters', 'The numbers a network learns: every kernel value and every FC entry. Nothing else on this page is learned — ReLU, pooling, global averaging and softmax are fixed arithmetic.'],
-  ['feature map', /\bfeature map\b/i, 'Feature map', 'The output grid of one kernel: at each position, how strongly the kernel\'s pattern matches the input there. Positive = looks like the pattern, negative = looks like its opposite.'],
-  ['channel', /\bchannels?\b/i, 'Channel', 'One of the stacked maps at a given stage. An RGB image has 3 channels; after a layer with 8 kernels there are 8. The "C" in H×W×C.'],
-  ['stride', /\bstride\b/i, 'Stride', 'How many pixels the window moves between neighbouring outputs. Stride 2 halves the output size and makes each output cell cover twice the input width.'],
-  ['padding', /\bpadding\b/i, 'Padding', 'A ring of zeros added around the input so the window can be centred on edge pixels. Padding 1 with a 3×3 kernel keeps the output the same size as the input.'],
-  ['dilation', /\bdilation\b/i, 'Dilation', 'Spacing between the kernel taps. Dilation 2 reads every second pixel, so a 3×3 kernel spans a 5×5 patch with the same 9 weights.'],
-  ['relu', /\bReLU\b/, 'ReLU', 'Rectified linear unit: max(0, x). Keeps positive responses, replaces negative ones with zero. This is the nonlinearity that stops stacked layers from collapsing into one.'],
-  ['pool', /\b(max-?pool(ing)?|pooling)\b/i, 'Pooling', 'Shrinks a map by summarising each 2×2 block with one number (its max or mean). Halves height and width; no learned parameters. Keeps the strongest response, drops exactly where it was.'],
-  ['gap', /\bglobal average(?: pooling)?\b/i, 'Global average pooling', 'Averages each channel over all positions, turning an H×W×C block into a vector of C numbers: "how much of each pattern, anywhere". Removes spatial layout entirely.'],
-  ['fc', /\b(fully connected(?: \(FC\))?(?: layer)?|FC)\b/, 'Fully connected (FC) layer', 'Also called dense or linear. Every input value connects to every output value through its own weight: 8 inputs × 10 outputs = 80 weights plus 10 biases. Output = input · W + b. The weights are learned parameters, like kernels; on this page they are random.'],
-  ['bias', /\bbias(es)?\b/i, 'Bias', 'A constant added to each output of a layer: one per output, learned. It shifts a score up or down regardless of the input.'],
-  ['score', /\bclass scores?\b/i, 'Score (logit)', 'The raw output of the FC layer for one class, before softmax. Can be any real number; higher means the network favours that class.'],
-  ['softmax', /\bsoftmax\b/i, 'Softmax', 'Turns scores into probabilities: p_k = exp(s_k) / Σ exp(s_j). All outputs are positive and sum to 1; the largest score gets the largest share, and gaps between scores are exaggerated.'],
-  ['rf', /\breceptive field\b/i, 'Receptive field', 'The patch of the input that can influence one value in a later map. Grows with every conv and every pool; the green boxes trace it.'],
-  ['training', /\btraining\b/i, 'Training', 'Showing the network many labelled images and nudging every weight so the correct class score rises. This page skips it; the weights are random or hand-picked, but the forward pass is identical.'],
-];
-const termById = Object.fromEntries(TERMS.map(t=>[t[0],t]));
-function linkTerms(){
-  document.querySelectorAll('.lede, .head p, .note').forEach(el=>{
-    const seen=new Set();
-    const walker=document.createTreeWalker(el,NodeFilter.SHOW_TEXT); const nodes=[]; while(walker.nextNode()) nodes.push(walker.currentNode);
-    nodes.forEach(node=>{
-      if(node.parentNode.closest('dfn,.n')) return;
-      let text=node.nodeValue;
-      for(const [id,re] of TERMS.map(t=>[t[0],t[1]])){
-        if(seen.has(id)) continue; const m=re.exec(text); if(!m) continue;
-        seen.add(id);
-        const before=document.createTextNode(text.slice(0,m.index));
-        const d=document.createElement('dfn'); d.dataset.t=id; d.tabIndex=0; d.textContent=m[0];
-        const after=document.createTextNode(text.slice(m.index+m[0].length));
-        node.parentNode.insertBefore(before,node); node.parentNode.insertBefore(d,node); node.parentNode.replaceChild(after,node);
-        node=after; text=after.nodeValue;
-      }
-    });
-  });
-}
-const tip=$('tip');
-function showTip(d){ const t=termById[d.dataset.t]; tip.innerHTML=`<b>${t[2]}</b>${t[3]}`; tip.style.display='block';
-  const r=d.getBoundingClientRect(); const w=tip.offsetWidth, h=tip.offsetHeight;
-  let x=clamp(r.left, 8, innerWidth-w-8), y=r.bottom+8; if(y+h>innerHeight-8) y=r.top-h-8; tip.style.left=x+'px'; tip.style.top=y+'px'; }
-function hideTip(){ tip.style.display='none'; }
-document.addEventListener('pointerover',e=>{ const d=e.target.closest&&e.target.closest('dfn'); if(d) showTip(d); });
-document.addEventListener('pointerout',e=>{ if(e.target.closest&&e.target.closest('dfn')) hideTip(); });
-document.addEventListener('focusin',e=>{ const d=e.target.closest&&e.target.closest('dfn'); if(d) showTip(d); });
-document.addEventListener('focusout',e=>{ if(e.target.closest&&e.target.closest('dfn')) hideTip(); });
-document.addEventListener('click',e=>{ const d=e.target.closest&&e.target.closest('dfn'); if(d){ if(tip.style.display==='block'&&tip.dataset.for===d.dataset.t){hideTip();tip.dataset.for='';} else {showTip(d);tip.dataset.for=d.dataset.t;} } else { hideTip(); tip.dataset.for=''; } });
-$('gloss').innerHTML = TERMS.map(t=>`<div><b>${t[2]}</b> — ${t[3]}</div>`).join('');
+// ---------- terms: shared mechanism in ../ui/terms.js (array, tooltip, glossary) ----------
 // parameter ledger
 function renderLedger(){
   const l1=K*K*C1, l2n=K*K*C1*C2, fc=C2*NC, bias=NC; const mx=Math.max(l1,l2n,fc);
@@ -536,7 +482,7 @@ function renderLedger(){
     + cell('layer-1 kernels',l1,`${C1} kernels × 3×3`) + cell('layer-2 kernels',l2n,`${C2} kernels × 3×3×${C1}`) + cell('FC weights',fc,`${C2} × ${NC}`) + cell('FC biases',bias,`one per class`)
     + cell('ReLU · pooling · global average · softmax',0,'fixed arithmetic, nothing learned',true);
 }
-linkTerms(); renderLedger();
+installTerms({selectors:'.lede, .head p, .note', tip:$('tip'), gloss:$('gloss')}); renderLedger();
 
 // ---------- init ----------
 inPresets['7'](); rerollL2(); rerollFC(); syncKgrid(); renderAll();

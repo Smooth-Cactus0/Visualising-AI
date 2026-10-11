@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>CNN explorer 3D — tensors as blocks</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../ui/terms.css">
 <style>
 :root{
   box-sizing:border-box;
@@ -52,7 +53,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 button.sel{background:var(--accent-soft);border-color:var(--accent)}
 button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .ctrls{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
-label.ctl{display:inline-flex;align-items:center;gap:5px;font-size:13px;color:var(--ink2)}
+.ctl{display:inline-flex;align-items:center;gap:5px;font-size:13px;color:var(--ink2)}
 input[type=range]{width:100%;accent-color:var(--accent)}
 #cIn{border-radius:4px;touch-action:none;display:block}
 .hint{font-size:12.5px;color:var(--ink2)}
@@ -84,6 +85,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
       <label class="ctl">pad <select id="pad"><option>0</option><option selected>1</option></select></label>
       <label class="ctl">dil <select id="dil"><option>1</option><option>2</option></select></label>
     </div>
+    <div class="ctrls"><span class="ctl">pool <span class="seg"><button id="poolMax" class="sel">max</button><button id="poolAvg">average</button></span></span></div>
     <h2>Channel spacing</h2>
     <input type="range" id="explode" min="0" max="1.6" step="0.05" value="0.7">
     <div class="hint">0 = solid H×W×C block, as the maths sees it. Larger = exploded into separate feature maps, as the 2D page draws them.</div>
@@ -101,11 +103,18 @@ input[type=range]{width:100%;accent-color:var(--accent)}
     <div class="keys"><span><i></i> kernel window (forward)</span><span><i class="g"></i> receptive field (backward)</span></div>
   </div>
 </div>
+<div class="panel" style="margin-top:16px">
+  <h2 style="margin-top:0">Terms</h2>
+  <div class="hint" style="margin-bottom:8px">Everything on this page is built from these. Hover or tap a dotted term above for the same definition in place.</div>
+  <div class="gloss" id="gloss"></div>
+</div>
 </main>
+<div id="tip" role="tooltip"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script type="module">
 import { K, forward as forwardCore, footprint as footprintCore, defaultBank, inputPresets } from '../core/cnn.js';
+import { installTerms } from '../ui/terms.js';
 const N=16, C1=4, C2=8, NC=10;
 const $=id=>document.getElementById(id);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -116,13 +125,13 @@ const cssVar=n=>getComputedStyle(document.documentElement).getPropertyValue(n).t
 // ---------- model ----------
 const input=new Float32Array(N*N);
 const bank=defaultBank.map(k=>k.slice()); // layer-1 kernels: hand-picked edge detectors
-let stride=1,pad=1,dil=1,explode=0.7;
+let stride=1,pad=1,dil=1,explode=0.7,poolMode='max';
 let l2=null,W=null,B=null;
 const rnd=(n,s=1)=>Array.from({length:n},()=>+((Math.random()*2-1)*s).toFixed(2));
 function rerollL2(){ l2=Array.from({length:C2},()=>Array.from({length:C1},()=>rnd(9))); }
 function rerollFC(){ W=Array.from({length:C2},()=>rnd(NC,0.6)); B=rnd(NC,0.3); }
 let S=null;
-function forward(){ return forwardCore({input,N,bank,l2,W,B,stride,pad,dil}); } // ReLU, max pooling; the maths lives in ../core/cnn.js
+function forward(){ return forwardCore({input,N,bank,l2,W,B,stride,pad,dil,poolMode}); } // ReLU after each conv; the maths lives in ../core/cnn.js
 const maxAbs=arrs=>Math.max(0.01,...arrs.flatMap(a=>Array.from(a,Math.abs)));
 
 // ---------- three ----------
@@ -221,6 +230,12 @@ function footprint(){
   if(probe.stage==='input') return R;
   return footprintCore(probe,S);
 }
+function poolMath(p){ // the 2×2 block a pooled cube summarises, written out as on the 2D page
+  if(p.stage!=='pool1'&&p.stage!=='pool2') return '';
+  const first=p.stage==='pool1'; const src=first?S.a1[p.ch]:S.a2[p.ch], n=first?S.O:S.Q, out=first?S.p1[p.ch]:S.p2[p.ch], q=first?S.Q:S.Q2;
+  const v=[]; for(const [r,c] of [[2*p.r,2*p.c],[2*p.r,2*p.c+1],[2*p.r+1,2*p.c],[2*p.r+1,2*p.c+1]]) if(r<n&&c<n) v.push(src[r*n+c]);
+  return `<span class="m">${poolMode} over the 2×2 block of ${first?'conv 1':'conv 2'} + ReLU: ${poolMode}( ${v.map(fmt).join(', ')} ) = ${fmt(out[p.r*q+p.c])}</span>`;
+}
 function updateHighlights(){
   hlGroup.clear(); const R=footprint(); const ro=$('readout');
   for(const [st,h] of Object.entries(R)){ const b=blockById(st); if(!b) continue; const [r0,r1,c0,c1]=h.rect;
@@ -237,7 +252,7 @@ function updateHighlights(){
   if(probe.stage==='scores'){ ro.innerHTML=`<b>class ${probe.r}</b>: score ${fmt(S.logits[probe.r])} → softmax ${(S.prob[probe.r]*100).toFixed(1)}%. Reads only the 8 averages, each weighted by its FC entry.<span class="m">score = Σ_f gap[f]·W[f,${probe.r}] + b = ${S.gap.map((g,f)=>`${fmt(g)}×${fmt(W[f][probe.r])}`).join(' + ')} + ${fmt(B[probe.r])}</span>`; return; }
   if(probe.stage==='gap'){ ro.innerHTML=`<b>global average, channel ${probe.ch+1}</b> = mean of pool-2 map ${probe.ch+1} (${S.Q2*S.Q2} cubes) = ${fmt(S.gap[probe.ch])}. Reads only that map; through it, the whole image.`; return; }
   const v=b.data(probe.ch)[probe.r*b.cols+probe.c]; const inR=R.input&&R.input.rect;
-  ro.innerHTML=`<b>${b.label.split('\n')[0]}</b>, channel ${probe.ch+1}, cell (${probe.r}, ${probe.c}) = ${fmt(v)}` + (inR?` — sees input rows ${inR[0]}–${inR[1]}, cols ${inR[2]}–${inR[3]}: a <b>${inR[1]-inR[0]+1}×${inR[3]-inR[2]+1}</b> patch` : '') + (probe.stage==='conv2'?`<span class="m">partial sums over the 4 input channels: ${S.parts[probe.ch].map(p=>fmt(p[probe.r*S.Q+probe.c])).join(' + ')} = ${fmt(S.c2[probe.ch][probe.r*S.Q+probe.c])} → ReLU → ${fmt(v)}</span>`:'');
+  ro.innerHTML=`<b>${b.label.split('\n')[0]}</b>, channel ${probe.ch+1}, cell (${probe.r}, ${probe.c}) = ${fmt(v)}` + (inR?` — sees input rows ${inR[0]}–${inR[1]}, cols ${inR[2]}–${inR[3]}: a <b>${inR[1]-inR[0]+1}×${inR[3]-inR[2]+1}</b> patch` : '') + poolMath(probe) + (probe.stage==='conv2'?`<span class="m">partial sums over the 4 input channels: ${S.parts[probe.ch].map(p=>fmt(p[probe.r*S.Q+probe.c])).join(' + ')} = ${fmt(S.c2[probe.ch][probe.r*S.Q+probe.c])} → ReLU → ${fmt(v)}</span>`:'');
 }
 
 // sweep
@@ -297,7 +312,7 @@ function centerOf(ids){ const bx=new THREE.Box3(); ids.forEach(id=>{ const b=blo
 function camPreset(name){
   const [lo,hi,all]=flowRange(); const span=hi-lo;
   const side=layout==='side';
-  if(name==='all'){ Object.assign(camGoal, side?{theta:0.55,phi:1.15,dist:span*1.05}:{theta:0.95,phi:1.2,dist:span*0.9}); camGoal.target.copy(all.getCenter(new THREE.Vector3())); if(!side) camGoal.target.y=0; }
+  if(name==='all'){ Object.assign(camGoal, side?{theta:0.55,phi:1.15,dist:span*1.05}:{theta:0.65,phi:0.7,dist:span*1.3}); camGoal.target.copy(all.getCenter(new THREE.Vector3())); if(!side) camGoal.target.y=-4.5; } // depth: from high and nearly head-on, so the stages recede as a staircase and the input hides nothing
   if(name==='l1'){ Object.assign(camGoal, side?{theta:0.7,phi:1.2,dist:46}:{theta:0.9,phi:1.2,dist:44}); camGoal.target.copy(centerOf(['input','conv1'])); }
   if(name==='l2'){ Object.assign(camGoal, side?{theta:0.8,phi:1.2,dist:34}:{theta:0.9,phi:1.2,dist:36}); camGoal.target.copy(centerOf(['pool1','conv2'])); }
   if(name==='head'){ Object.assign(camGoal, side?{theta:0.9,phi:1.25,dist:30}:{theta:0.9,phi:1.25,dist:30}); camGoal.target.copy(centerOf(['pool2','scores'])); }
@@ -363,11 +378,14 @@ function recompute(rebuild=false){ const old=S; S=forward(); drawIn();
 $('stride').onchange=e=>{ stride=+e.target.value; recompute(true); };
 $('pad').onchange=e=>{ pad=+e.target.value; recompute(true); };
 $('dil').onchange=e=>{ dil=+e.target.value; recompute(true); };
+function setPool(mode){ poolMode=mode; $('poolMax').classList.toggle('sel',mode==='max'); $('poolAvg').classList.toggle('sel',mode==='avg'); recompute(); }
+$('poolMax').onclick=()=>setPool('max'); $('poolAvg').onclick=()=>setPool('avg');
 $('explode').oninput=e=>{ explode=+e.target.value; refreshNet(); };
 $('l2Rand').onclick=()=>{ rerollL2(); recompute(); };
 $('fcRand').onclick=()=>{ rerollFC(); recompute(); };
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>recompute());
 
+installTerms({selectors:'.lede, .hint:not(#swHint)', tip:$('tip'), gloss:$('gloss')});
 inPresets['7'](); rerollL2(); rerollFC(); setSweep('off'); resize(); recompute(true); applyCam(); loop();
 </script>
 </body>

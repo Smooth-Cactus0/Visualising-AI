@@ -1,0 +1,9 @@
+/* ui/terms.css — dotted inline definitions, their tooltip, and the Terms section. Shared by every page;
+   uses the page's colour tokens (--accent, --ink, --bg, --line2), so it follows the page's light/dark theme. */
+dfn{font-style:normal;text-decoration:underline dotted var(--accent);text-underline-offset:3px;cursor:help;color:inherit}
+dfn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#tip{position:fixed;z-index:9;max-width:320px;background:var(--ink);color:var(--bg);font-size:13px;line-height:1.45;padding:9px 12px;border-radius:7px;pointer-events:none;display:none;box-shadow:0 4px 18px rgba(0,0,0,.25)}
+#tip b{display:block;font-weight:600;margin-bottom:2px}
+.gloss{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px 26px;font-size:14px}
+.gloss div{padding:6px 0;border-bottom:1px solid var(--line2)}
+.gloss b{font-weight:600}
