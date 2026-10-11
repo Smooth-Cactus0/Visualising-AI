@@ -197,7 +197,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 <!-- 5 PIPELINE TO PREDICTION -->
 <section id="s5">
   <div class="head"><h2>From feature maps to a prediction</h2><span class="n">pool 1 → conv 2 + ReLU → pool 2 → global average → FC → softmax</span>
-    <p>The whole network end to end. After the last pooling, each channel is averaged over space into one number (global average pooling), so the image becomes a vector of 8 "how much of pattern <i>j</i> is present, anywhere". A fully connected (FC) layer maps that vector to 10 class scores: each of the 8 values connects to each of the 10 classes through its own weight, so the FC layer is just an 8×10 grid of numbers plus 10 biases — learned parameters exactly like the kernels, and the only other kind the network has. Softmax turns scores into probabilities. Hover any map cell for its receptive field, a vector entry to see which map it summarises, or a class bar to see how its score is built. Layer-2 and FC weights here are random, so the prediction is arbitrary — training is what moves these weights until the right bar wins. The mechanics are exactly what a trained network does.</p></div>
+    <p>The whole network end to end. After the last pooling, each channel is averaged over space into one number (global average pooling), so the image becomes a vector of 8 "how much of pattern <i>j</i> is present, anywhere". A fully connected (FC) layer maps that vector to 10 class scores: each of the 8 values connects to each of the 10 classes through its own weight, so the FC layer is just an 8×10 grid of numbers plus 10 biases — learned parameters exactly like the kernels, and the only other kind the network has. Softmax turns scores into probabilities. Hover any map cell for its receptive field, a vector entry to see which map it summarises, an FC weight to see which average and class it connects, or a class bar to see how its score is built. Layer-2 and FC weights here are random, so the prediction is arbitrary — training is what moves these weights until the right bar wins. The mechanics are exactly what a trained network does.</p></div>
   <div class="ledger" id="ledger"></div>
   <div class="pipe" id="pipe"></div>
   <div class="rfout" id="rfout">Hover a cell anywhere in the page to trace its receptive field.</div>
@@ -296,11 +296,12 @@ function forward(){
 }
 
 // receptive-field propagation: rects per stage + which channel sets are lit (core footprint).
-// Head probes (a global-average entry, a class) start from the whole pool-2 block.
+// Head probes show only their direct link (the rest is drawn in renderPipe): a global-average entry lights its own
+// pool-2 map; an FC weight and a class light the averages. The cone back to the input is not drawn there: it would be the whole image.
 function footprint(S){
   if(!probe) return {};
-  if(probe.kind==='gap') return footprintCore({stage:'pool2',rect:[0,S.Q2-1,0,S.Q2-1],chs:new Set([probe.f])},S);
-  if(probe.kind==='class') return footprintCore({stage:'pool2',rect:[0,S.Q2-1,0,S.Q2-1],chs:null},S);
+  if(probe.kind==='gap') return {pool2:{rect:[0,S.Q2-1,0,S.Q2-1],chs:new Set([probe.f])}};
+  if(probe.kind==='class'||probe.kind==='fc') return {};
   return footprintCore(probe,S);
 }
 const lit=(R,st,ch)=> R[st] && (R[st].chs===null || R[st].chs.has(ch)) ? R[st].rect : null;
@@ -376,7 +377,10 @@ effective kernel extent: ${dil*(K-1)+1}×${dil*(K-1)+1}`;
   renderPipe(S,R);
   // readout
   const ro=$('rfout');
-  if(R.input){ const [r0,r1,c0,c1]=R.input.rect; const src = probe.kind==='gap'? `global-average entry ${probe.f+1}` : probe.kind==='class'? `class ${probe.c}` : `${probe.stage.replace(/(\d)/,' $1')}${probe.ch!=null?` map ${probe.ch+1}`:''} cell (${probe.rect[0]}, ${probe.rect[2]})`;
+  if(probe&&probe.kind==='gap') ro.innerHTML=`<b>global-average entry ${probe.f+1}</b> is the mean of pool-2 map ${probe.f+1} (outlined). Through that map it sees the whole image, so the cone back to the input is not drawn.`;
+  else if(probe&&probe.kind==='fc') ro.innerHTML=`<b>FC weight</b> row ${probe.f+1}, class ${probe.c} links global-average entry ${probe.f+1} to class ${probe.c}: one of the 8 terms of that class's score.`;
+  else if(probe&&probe.kind==='class') ro.innerHTML=`<b>class ${probe.c}</b> reads only the 8 global averages, each through its own weight in column ${probe.c} of W. Nothing spatial survives to here.`;
+  else if(R.input){ const [r0,r1,c0,c1]=R.input.rect; const src=`${probe.stage.replace(/([0-9])/,' $1')}${probe.ch!=null?` map ${probe.ch+1}`:''} cell (${probe.rect[0]}, ${probe.rect[2]})`;
     ro.innerHTML=`<b>${src}</b> sees input rows ${r0}–${r1}, cols ${c0}–${c1}: a <b>${r1-r0+1}×${c1-c0+1}</b> patch of the ${N}×${N} image${R.padIn && (R.padIn.rect[0]<pad||R.padIn.rect[2]<pad||R.padIn.rect[1]>=N+pad||R.padIn.rect[3]>=N+pad)?' (plus zero padding beyond the edge)':''}.`; }
   else ro.textContent='Hover a cell anywhere in the page to trace its receptive field.';
 }
@@ -396,7 +400,7 @@ function renderPipe(S,R){
   // GAP vector
   { const [d,s]=stage('global average',`vector of 8`); s.style.gridTemplateColumns='auto';
     const cv=document.createElement('canvas'); cv.width=40; cv.height=8*40; cv.style.cursor='pointer';
-    drawGrid(cv,S.gap,1,C2,{mode:'div',scale:maxAbs(S.gap),labels:true, rect: probe&&probe.kind==='gap'? [probe.f,probe.f,0,0] : null});
+    drawGrid(cv,S.gap,1,C2,{mode:'div',scale:maxAbs(S.gap),labels:true, rect: !probe? null : probe.kind==='gap'||probe.kind==='fc'? [probe.f,probe.f,0,0] : probe.kind==='class'? [0,C2-1,0,0] : null});
     cv.addEventListener('pointermove',ev=>{ const p=cellAt(cv,ev); const np=p?{kind:'gap',f:p[0]}:null; if(JSON.stringify(np)!==JSON.stringify(probe)){probe=np;renderAll();} });
     cv.addEventListener('pointerleave',()=>{ if(probe){probe=null;renderAll();} });
     s.append(cv); pipe.append(d, arrow()); }
@@ -404,14 +408,16 @@ function renderPipe(S,R){
   { const [d,s]=stage('FC weights',`8 × 10, plus 10 biases`); s.style.gridTemplateColumns='auto';
     const flat=new Float32Array(C2*NC); for(let f=0;f<C2;f++)for(let c=0;c<NC;c++) flat[f*NC+c]=W[f][c];
     const cv=document.createElement('canvas'); cv.width=NC*22; cv.height=C2*22;
-    let rect=null; if(probe&&probe.kind==='gap') rect=[probe.f,probe.f,0,NC-1]; if(probe&&probe.kind==='class') rect=[0,C2-1,probe.c,probe.c];
-    drawGrid(cv,flat,NC,C2,{mode:'div',scale:maxAbs(flat),rect});
+    let rect=null; if(probe&&probe.kind==='gap') rect=[probe.f,probe.f,0,NC-1]; if(probe&&probe.kind==='class') rect=[0,C2-1,probe.c,probe.c]; if(probe&&probe.kind==='fc') rect=[probe.f,probe.f,probe.c,probe.c];
+    drawGrid(cv,flat,NC,C2,{mode:'div',scale:maxAbs(flat),rect}); cv.style.cursor='pointer';
+    cv.addEventListener('pointermove',ev=>{ const p=cellAt(cv,ev); const np=p?{kind:'fc',f:p[0],c:p[1]}:null; if(JSON.stringify(np)!==JSON.stringify(probe)){probe=np;renderAll();} });
+    cv.addEventListener('pointerleave',()=>{ if(probe){probe=null;renderAll();} });
     s.append(cv); const c2=document.createElement('div'); c2.textContent='rows: features · cols: classes'; c2.style.marginTop='4px'; d.append(c2); pipe.append(d, arrow()); }
   // bars
   { const [d,s]=stage('scores → softmax','hover a class'); s.style.gridTemplateColumns='auto';
     const bars=document.createElement('div'); bars.className='bars'; const top=S.prob.indexOf(Math.max(...S.prob));
     for(let c=0;c<NC;c++){ const lab=document.createElement('div'); lab.className='lab'; lab.textContent=`class ${c}`;
-      const bar=document.createElement('div'); bar.className='bar'+(c===top?' top':'')+(probe&&probe.kind==='class'&&probe.c===c?' hov':''); const i=document.createElement('i'); i.style.width=(S.prob[c]*100)+'%'; bar.append(i);
+      const bar=document.createElement('div'); bar.className='bar'+(c===top?' top':'')+(probe&&(probe.kind==='class'||probe.kind==='fc')&&probe.c===c?' hov':''); const i=document.createElement('i'); i.style.width=(S.prob[c]*100)+'%'; bar.append(i);
       const v=document.createElement('div'); v.className='v'; v.textContent=(S.prob[c]*100).toFixed(1)+'%';
       [lab,bar,v].forEach(el=>{ el.addEventListener('pointerenter',()=>{ if(!(probe&&probe.kind==='class'&&probe.c===c)){ probe={kind:'class',c}; renderAll(); } }); });
       bars.append(lab,bar,v); }
@@ -421,6 +427,7 @@ function renderPipe(S,R){
   const hm=$('headMath');
   if(probe&&probe.kind==='class'){ const c=probe.c; const terms=S.gap.map((g,f)=>`${fmt(g)}×${fmt(W[f][c])}`).join(' + ');
     hm.innerHTML=`score[${c}] = Σ_f gap[f]·W[f,${c}] + b[${c}]\n         = ${terms} + ${fmt(B[c])}\n         = <span class="sum">${fmt(S.logits[c])}</span>\nsoftmax  = exp(score[${c}]) / Σ_k exp(score[k]) = <span class="sum">${(S.prob[c]*100).toFixed(1)}%</span>`; }
+  else if(probe&&probe.kind==='fc'){ const {f,c}=probe; hm.innerHTML=`W[row ${f+1}, class ${c}] = ${fmt(W[f][c])}: multiplies global-average entry ${f+1} into the score of class ${c}\n         ${fmt(S.gap[f])} × ${fmt(W[f][c])} = <span class="sum">${fmt(S.gap[f]*W[f][c])}</span>, one of the 8 terms of score[${c}] = ${fmt(S.logits[c])}`; }
   else if(probe&&probe.kind==='gap'){ const f=probe.f; hm.innerHTML=`gap[${f+1}] = mean of pool-2 map ${f+1} (${S.Q2}×${S.Q2} = ${S.Q2*S.Q2} values) = <span class="sum">${fmt(S.gap[f])}</span>\nfeeds every class through row ${f+1} of W (highlighted)`; }
   else hm.textContent=`scores = gap · W + b        (8 values × 8×10 matrix + 10 biases → 10 scores)\nprob   = softmax(scores)    hover a class bar or a vector entry for the actual numbers`;
 }
