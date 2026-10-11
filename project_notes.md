@@ -1,5 +1,5 @@
 # DL explorer (Visualise models): project notes
-Last updated: 2026-10-12, by a working session: Intent recorded in Alexy's words; work continues from the repo.
+Last updated: 2026-10-12, by a working session: both pages wired to `core/cnn.js` (HANDOFF step 1) with no change in behaviour.
 
 ## Intent
 _Alexy's words. Changed only when Alexy asks, directly or by pointing to a court point._
@@ -16,18 +16,20 @@ Interactive web pages, with no build step, that show what the boxes in a deep-le
 ### Method
 - Plain HTML plus ES modules, served statically. GitHub Pages deploys the repo root from `main` (`.github/workflows/pages.yml`). Local run: `python -m http.server 8000` from the repo root (modules need http, not file://); maths test: `node core/cnn.test.mjs`.
 - Toy network: 16×16×1 input → conv1 (4 hand-picked 3×3 kernels: Sobel-x, Sobel-y, Laplacian, diagonal; stride, padding and dilation selectable) + ReLU → 2×2 pool (max or avg) → conv2 (8 random 3×3×4 kernels) + ReLU → 2×2 pool → global average (8 values) → FC 8×10 (random) → softmax over 10 classes. Nothing is trained; the pages say so wherever a prediction appears.
-- `core/cnn.js` holds the forward pass, pooling, softmax, receptive-field propagation and the kernel and input presets, as pure functions with a test. The two pages do not import it yet: each still carries its own inline copy of the same logic.
+- `core/cnn.js` holds the forward pass, pooling, softmax, receptive-field propagation and the kernel and input presets, as pure functions with a test. Both pages are ES modules (`<script type="module">`) that import it; each keeps only display code plus two thin wrappers: the 2D page builds the zero-padded input it draws in stage 2, and both pages resolve the head probes (a global-average entry, a class, a score, an input pixel) before calling the core `footprint`. `forward` takes `activation: 'relu' | 'none'` (the 2D ReLU toggle) and `poolMode: 'max' | 'avg'`; `footprint` takes one cell `{stage, r, c, ch}` or a region `{stage, rect, ch | chs}`.
 - Interaction grammar shared by every page: yellow = forward kernel window, green = receptive field traced backward; hovering any cell highlights its receptive field in every upstream tensor; technical terms get a dotted inline definition plus a Terms section (2D page only so far).
 - three.js r128 UMD from cdnjs; OrbitControls is not in that build, so the 3D page has its own small orbit implementation. External scripts only from cdnjs or jsDelivr, pinned.
 
 ### Results
 - 2026-10-12: `node core/cnn.test.mjs` passes (laptop, Node 24.19.0, repo at commit 6a95715): output-size formula, identity kernel, max pool, softmax sums to 1, shapes 16 → 8 → 4, receptive field of pool2 cell (1,1) = input rows 1–10, cols 1–10.
+- 2026-10-12: wiring check (laptop, Node 24.19.0 and headless Edge, commit a09b700). `node core/cnn.test.mjs` passes, now also covering `activation: 'none'`, average pooling and region probes. The pages' old inline maths (from commit 6a95715) and `core/cnn.js` agree bit for bit on every tensor of the forward pass over all reachable settings (2D: stride 1–3, padding 0–2, dilation 1–2, ReLU on/off, max/avg pooling; 3D: stride 1–2, padding 0–1, dilation 1–2), all seven input presets, fixed random layer-2 and FC weights, and on the receptive field of every cell of every stage and channel plus the head probes: 560 forward configurations, 21,384 probes, 27,572 comparisons, 0 differences (one-off script in the session scratchpad, not in the repo). Headless Edge rendered the old and new pages with the same seeded `Math.random`: identical DOMs once script blocks are stripped, no page console errors.
 - No accuracy figures exist: weights are hand-picked or random, no model has been trained.
 
 ### Decisions
 - 2026-10-12: The repo lives at `C:\Users\LouisA\repos\dl-explorer`, not in the OneDrive project folder. Why: Windows Controlled Folder Access (IT policy, enforced since 2026-09-23) blocks git, node, python and every other shell tool from writing under OneDrive Documents; only Claude's Write/Edit tools can write there. The OneDrive folder keeps the original zip and a pointer README.
 - 2026-10-12: First commit imports the artifact export unchanged, so the pages on `main` are exactly the published artifacts. Why: a clean baseline before the shared-module refactor.
 - 2026-10-12: VS Code and Claude Code are opened on the repo, not on the OneDrive folder, from here on. Why: Alexy, after the port ("I'll continue on the proper folder afterwards"); notes and Claude memory live with the repo.
+- 2026-10-12: The pages import `core/cnn.js` as ES modules instead of carrying inline copies of the maths. The 2D ReLU toggle and the head probes went into the core (an `activation` option, region probes for `footprint`) rather than staying as page-side copies of the propagation loop. Why: one copy of the maths, and the page wrappers stay a few lines each.
 - Carried over from the artifact sessions (HANDOFF.md, "Decisions already taken"): the 3D second view is stages along depth with connections, not volumetric 3D convolution; head wiring links only direct neighbours (an average to its own pool-2 map, a class to the 8 averages); no shape/parameter table, the proportional ledger replaced it; padding is not drawn as cubes in 3D, the layer-1 window overhangs the input instead; layer-1 kernels are Sobel-x, Sobel-y, Laplacian and diagonal, layer 2 and the FC are random with reroll buttons.
 
 ### Map
@@ -41,8 +43,9 @@ Interactive web pages, with no build step, that show what the boxes in a deep-le
 - Trained weights (planned, empty): `models/`
 
 ### Status
-Imported and committed on 2026-10-12 (commit 6a95715), not pushed, no GitHub remote yet. Next, in HANDOFF.md order: (1) wire both pages to `core/cnn.js` with no change in behaviour, checked in the browser and with the node test; (2) rough edges: in the 3D depth layout the input occludes deeper stages from the default angle, the 3D page lacks the Terms tooltips, 3D pooling is max only; (3) ideas: trained LeNet-style weights exported to `models/`, 28×28 input, shared input state between the pages; (4) ViT, ConvNeXt and CoAtNet pages reusing the same interaction grammar.
+Imported 2026-10-12 (commit 6a95715); both pages wired to `core/cnn.js` the same day (commit a09b700, HANDOFF step 1 done). Not pushed, no GitHub remote yet. Next, in HANDOFF.md order: (2) rough edges: in the 3D depth layout the input occludes deeper stages from the default angle, the 3D page lacks the Terms tooltips, 3D pooling is max only, and the 2D padding dropdown shows 0 at load while the model uses padding 1 (see Open questions); (3) ideas: trained LeNet-style weights exported to `models/`, 28×28 input, shared input state between the pages; (4) ViT, ConvNeXt and CoAtNet pages reusing the same interaction grammar.
 
 ## Open questions and known gaps
 - Intent does not say who the tool is for; the first court can capture it.
 - No GitHub repo yet; the name, visibility and the Pages source ("GitHub Actions") are Alexy's call before the first push.
+- The 2D page's padding dropdown marks no default, so it shows 0 at load while the page computes with padding 1 (the 3D page marks 1 as selected). Found during the wiring and left as is, since that work was not to change behaviour; a one-line fix once Alexy wants it.
