@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CNN explorer — what a convolution actually does</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  --bg:#f7f8f6; --panel:#ffffff; --ink:#1d2430; --ink2:#5b6474; --line:#d9ddd6; --line2:#eef0ec;
+  --accent:#2457a8; --accent-soft:#dde7f7;
+  --pos:#e5641e; --neg:#2a6fd6; --zero:#f3f4f1;
+  --hl:#ffd94a; --hl2:#3fae4b;
+  --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#171a1f; --panel:#1f232a; --ink:#e8eaee; --ink2:#9aa3b2; --line:#343a44; --line2:#272c35;
+  --accent:#7fa7ea; --accent-soft:#263650; --zero:#2a2f38; --hl:#d9b32d; --hl2:#5ad66a;
+}}
+:root[data-theme="dark"]{
+  --bg:#171a1f; --panel:#1f232a; --ink:#e8eaee; --ink2:#9aa3b2; --line:#343a44; --line2:#272c35;
+  --accent:#7fa7ea; --accent-soft:#263650; --zero:#2a2f38; --hl:#d9b32d; --hl2:#5ad66a;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px);}
+*{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Public Sans",system-ui,sans-serif;font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+main{max-width:1180px;margin:0 auto;padding:28px 20px 80px}
+h1{font-size:28px;font-weight:600;letter-spacing:-.01em;margin:0 0 6px}
+h2{font-size:19px;font-weight:600;margin:0 0 4px}
+p{margin:0 0 10px;max-width:68ch}
+.lede{color:var(--ink2);font-size:15.5px;margin-bottom:10px}
+.keys{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--ink2);margin-bottom:26px}
+.keys span{display:inline-flex;align-items:center;gap:6px}
+.keys i{display:inline-block;width:14px;height:14px;border-radius:3px;border:3px solid var(--hl)}
+.keys i.g{border-color:var(--hl2)}
+section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin-bottom:22px}
+.head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:12px}
+.head .n{font-family:var(--mono);color:var(--ink2);font-size:13px}
+.head p{color:var(--ink2);margin:0;flex:1 1 100%;font-size:14px}
+.row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 260px;min-width:0}
+.col.narrow{flex:0 1 auto}
+canvas{display:block;max-width:100%;touch-action:none;border-radius:4px}
+.cap{font-size:13px;color:var(--ink2);margin-top:6px;font-variant-numeric:tabular-nums}
+.cap b{color:var(--ink);font-weight:600}
+.ctrls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
+button,select{font:inherit;font-size:13.5px;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:5px 10px;cursor:pointer}
+button:hover,select:hover{border-color:var(--accent)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.sel{background:var(--accent-soft);border-color:var(--accent)}
+label.ctl{display:inline-flex;align-items:center;gap:6px;font-size:13.5px;color:var(--ink2)}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.kgrid{display:grid;grid-template-columns:repeat(3,52px);gap:4px}
+.kgrid input{width:52px;height:40px;font:inherit;font-family:var(--mono);font-size:13px;text-align:center;border:1px solid var(--line);border-radius:5px;background:var(--panel);color:var(--ink)}
+.math{font-family:var(--mono);font-size:12.5px;line-height:1.7;background:var(--line2);border-radius:6px;padding:10px 12px;overflow-x:auto;white-space:pre}
+.math .sum{color:var(--accent);font-weight:600}
+.arith{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.arith .tiny{text-align:center;font-size:12px;color:var(--ink2)}
+.eq{font-size:22px;color:var(--ink2)}
+.maps{display:flex;gap:14px;flex-wrap:wrap}
+.maps > div{text-align:center;font-size:12.5px;color:var(--ink2)}
+.maps canvas{margin:0 auto}
+.legend{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink2);margin-left:auto}
+.legend i{display:inline-block;width:34px;height:10px;border-radius:3px;background:linear-gradient(90deg,var(--neg),var(--zero),var(--pos))}
+.note{font-size:13.5px;color:var(--ink2);border-left:3px solid var(--accent-soft);padding:4px 12px;margin-top:10px;max-width:72ch}
+.toggle{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.toggle button{border:0;border-radius:0}
+.toggle button+button{border-left:1px solid var(--line)}
+/* pipeline */
+.pipe{display:flex;gap:18px;align-items:flex-start;overflow-x:auto;padding:6px 2px 12px}
+.stage{flex:0 0 auto;text-align:center;font-size:12.5px;color:var(--ink2)}
+.stage .t{font-weight:500;color:var(--ink);margin-bottom:6px;white-space:nowrap}
+.stack{display:grid;gap:6px}
+.stack canvas{cursor:crosshair}
+.arrow{flex:0 0 auto;align-self:center;color:var(--ink2);font-size:20px;padding-top:18px}
+.bars{display:grid;grid-template-columns:auto 1fr auto;gap:4px 8px;align-items:center;min-width:220px;text-align:left}
+.bars .lab{font-family:var(--mono);font-size:12.5px;color:var(--ink2)}
+.bars .bar{height:14px;background:var(--line2);border-radius:3px;overflow:hidden;cursor:pointer}
+.bars .bar i{display:block;height:100%;background:var(--accent);opacity:.75}
+.bars .bar.top i{opacity:1}
+.bars .bar.hov{outline:2px solid var(--hl2)}
+.bars .v{font-family:var(--mono);font-size:12px;color:var(--ink2);min-width:3.5em;text-align:right}
+.rfout{font-size:13.5px;margin-top:4px;min-height:1.6em}
+.rfout b{font-weight:600}
+dfn{font-style:normal;text-decoration:underline dotted var(--accent);text-underline-offset:3px;cursor:help;color:inherit}
+dfn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#tip{position:fixed;z-index:9;max-width:320px;background:var(--ink);color:var(--bg);font-size:13px;line-height:1.45;padding:9px 12px;border-radius:7px;pointer-events:none;display:none;box-shadow:0 4px 18px rgba(0,0,0,.25)}
+#tip b{display:block;font-weight:600;margin-bottom:2px}
+.gloss{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px 26px;font-size:14px}
+.gloss div{padding:6px 0;border-bottom:1px solid var(--line2)}
+.gloss b{font-weight:600}
+.ledger{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;margin:4px 0 14px;font-size:13px;color:var(--ink2)}
+.ledger .p{min-width:120px}
+.ledger .p b{display:block;color:var(--ink);font-weight:600;font-size:14px}
+.ledger .p i{display:block;height:10px;border-radius:3px;background:var(--accent);margin:4px 0}
+.ledger .p.none i{background:var(--line)}
+@media (prefers-reduced-motion: reduce){ *{transition:none!important} }
+</style>
+</head>
+<body>
+<main>
+<h1>CNN explorer</h1>
+<p class="lede">A stage diagram says "Conv 3×3 → ReLU → MaxPool → … → FC". This page shows the arithmetic those boxes stand for, on an input you draw, with every intermediate tensor visible all the way to the class scores. Everything downstream recomputes when you change something upstream.</p>
+<div class="keys"><span><i></i> window the kernel is currently reading (forward)</span><span><i class="g"></i> receptive field: hover any cell of any map to see every upstream patch that feeds it, back to the pixels</span></div>
+
+<!-- 1 INPUT + KERNEL -->
+<section id="s1">
+  <div class="head"><h2>Input and kernel</h2><span class="n">16×16×1 image, one 3×3 filter</span>
+    <p>Paint on the grid (click–drag; right-drag or shift erases). Pixel values are 0–1. The kernel is the set of learned weights in a real network; here you pick or type them.</p></div>
+  <div class="row">
+    <div class="col narrow">
+      <canvas id="cIn" width="320" height="320"></canvas>
+      <div class="ctrls" id="inPresets"></div>
+    </div>
+    <div class="col narrow">
+      <div class="kgrid" id="kgrid"></div>
+      <div class="ctrls"><select id="kPreset"></select><button id="kRand">Random</button></div>
+      <div class="cap">Kernel slot in use: <b id="kSlotLbl">1</b> of 4 (bank in stage 4)</div>
+    </div>
+    <div class="col">
+      <div class="ctrls">
+        <label class="ctl">stride <select id="stride"><option>1</option><option>2</option><option>3</option></select></label>
+        <label class="ctl">padding <select id="pad"><option>0</option><option>1</option><option>2</option></select></label>
+        <label class="ctl">dilation <select id="dil"><option>1</option><option>2</option></select></label>
+      </div>
+      <div class="math" id="shapeMath"></div>
+      <div class="note">Padding adds a border of zeros so edge pixels get a full window. Stride is how far the window jumps. Dilation spreads the kernel taps apart so the same 9 weights cover a wider area. All three only change <em>where</em> the window lands; the arithmetic at each position is identical.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 2 CONVOLUTION STEP -->
+<section id="s2">
+  <div class="head"><h2>Convolution, one position at a time</h2><span class="n">out[i,j] = Σ window ⊙ kernel</span>
+    <p>Scrub through the output positions. The yellow window on the (padded) input is multiplied elementwise with the kernel and summed into one output cell. That is the whole operation; a conv layer is this repeated at every position and for every kernel.</p></div>
+  <div class="row">
+    <div class="col narrow">
+      <canvas id="cPadIn" width="340" height="340"></canvas>
+      <div class="cap">Padded input, window at output <b id="posLbl">(0, 0)</b></div>
+    </div>
+    <div class="col narrow">
+      <canvas id="cOut" width="300" height="300"></canvas>
+      <div class="cap">Feature map (raw) <span class="legend" style="margin-left:10px"><span>−</span><i></i><span>+</span></span></div>
+    </div>
+    <div class="col">
+      <div class="arith">
+        <div><canvas id="cWin" width="96" height="96"></canvas><div class="tiny">window</div></div>
+        <div class="eq">⊙</div>
+        <div><canvas id="cKer" width="96" height="96"></canvas><div class="tiny">kernel</div></div>
+        <div class="eq">=</div>
+        <div><canvas id="cProd" width="96" height="96"></canvas><div class="tiny">products</div></div>
+      </div>
+      <div class="math" id="stepMath"></div>
+      <input type="range" id="stepSlider" min="0" max="195" value="0">
+      <div class="ctrls">
+        <button id="prev">← prev</button><button id="play" class="primary">Play</button><button id="next">next →</button>
+        <label class="ctl">speed <select id="speed"><option value="300">slow</option><option value="120" selected>normal</option><option value="40">fast</option></select></label>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 3 RELU + POOL -->
+<section id="s3">
+  <div class="head"><h2>Nonlinearity and pooling</h2><span class="n">ReLU · pool 2×2 / stride 2</span>
+    <p>ReLU clips negatives to zero: it keeps "evidence for" the pattern and drops "evidence against". Pooling then keeps the strongest (or average) response in each 2×2 block, halving height and width. Hover any cell: its receptive field lights up in green on the earlier maps and on the input. Neither step has learned parameters.</p></div>
+  <div class="row">
+    <div class="col narrow"><canvas id="cRaw" width="220" height="220"></canvas><div class="cap">raw conv output <b id="rawShape"></b></div></div>
+    <div class="col narrow"><canvas id="cRelu" width="220" height="220"></canvas><div class="cap">after ReLU <b id="reluShape"></b></div></div>
+    <div class="col narrow"><canvas id="cPool" width="220" height="220"></canvas><div class="cap">after pool <b id="poolShape"></b></div></div>
+    <div class="col">
+      <div class="ctrls"><span class="toggle"><button id="actRelu" class="sel">ReLU</button><button id="actNone">no activation</button></span>
+        <span class="toggle"><button id="poolMax" class="sel">max</button><button id="poolAvg">average</button></span></div>
+      <div class="math" id="poolMath">hover a pooled cell</div>
+      <div class="note">Without the nonlinearity, two stacked conv layers collapse into one bigger linear filter: nothing new could be computed by going deeper. Try "no activation" and notice the pooled map now carries negative values through.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 4 CHANNELS -->
+<section id="s4">
+  <div class="head"><h2>Many kernels, then a kernel over all channels</h2><span class="n">layer 1: 4 × (3×3×1) · layer 2: 8 × (3×3×4)</span>
+    <p>A conv layer has many kernels; each produces its own feature map, and the maps stack into channels. The step that diagrams hide: a kernel in the <em>next</em> layer is not 3×3, it is 3×3×C — one 3×3 slice per input channel. Each slice convolves its channel, and the partial maps are summed into a single output. Shown here for the first of the eight layer-2 kernels. Click a bank slot to make it the kernel used in stages 1–3.</p></div>
+  <div class="row">
+    <div class="col">
+      <div class="cap" style="margin:0 0 6px">Layer 1 bank — 4 kernels → 4 feature maps (after ReLU + pool)</div>
+      <div class="maps" id="bank"></div>
+    </div>
+  </div>
+  <div class="row" style="margin-top:16px">
+    <div class="col">
+      <div class="cap" style="margin:0 0 6px">Layer 2, kernel 1 — four slices, four partial sums, one output map</div>
+      <div class="maps" id="layer2"></div>
+      <div class="ctrls"><button id="l2Rand">Reroll layer-2 kernels</button><span class="cap">The output is a detector for a <em>combination</em> of layer-1 patterns at neighbouring positions — this is how edges become corners, and corners become parts.</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 5 PIPELINE TO PREDICTION -->
+<section id="s5">
+  <div class="head"><h2>From feature maps to a prediction</h2><span class="n">pool 1 → conv 2 + ReLU → pool 2 → global average → FC → softmax</span>
+    <p>The whole network end to end. After the last pooling, each channel is averaged over space into one number (global average pooling), so the image becomes a vector of 8 "how much of pattern <i>j</i> is present, anywhere". A fully connected (FC) layer maps that vector to 10 class scores: each of the 8 values connects to each of the 10 classes through its own weight, so the FC layer is just an 8×10 grid of numbers plus 10 biases — learned parameters exactly like the kernels, and the only other kind the network has. Softmax turns scores into probabilities. Hover any map cell for its receptive field, a vector entry to see which map it summarises, or a class bar to see how its score is built. Layer-2 and FC weights here are random, so the prediction is arbitrary — training is what moves these weights until the right bar wins. The mechanics are exactly what a trained network does.</p></div>
+  <div class="ledger" id="ledger"></div>
+  <div class="pipe" id="pipe"></div>
+  <div class="rfout" id="rfout">Hover a cell anywhere in the page to trace its receptive field.</div>
+  <div class="math" id="headMath"></div>
+  <div class="ctrls"><button id="fcRand">Reroll FC weights</button></div>
+  <div class="note">Receptive field grows at every conv and every pool. The layer-2 pooled cells already see a large patch of the 16×16 input; in a 224×224 network the stage-4 cells of a 7×7 grid each see most of the image. That spatial summarising is what lets a small FC head classify — and it's the thing attention does in one step rather than by stacking.</div>
+</section>
+<section id="s6">
+  <div class="head"><h2>Terms</h2><span class="n">dotted words above point here</span>
+    <p>Everything on this page is built from these. Hover or tap a dotted term anywhere above for the same definition in place.</p></div>
+  <div class="gloss" id="gloss"></div>
+</section>
+</main>
+<div id="tip" role="tooltip"></div>
+
+<script>
+(() => {
+const N = 16, K = 3, C1 = 4, C2 = 8, NC = 10;
+const $ = id => document.getElementById(id);
+
+// ---------- state ----------
+const input = new Float32Array(N*N);
+const bank = [
+  [-1,0,1,-2,0,2,-1,0,1],
+  [-1,-2,-1,0,0,0,1,2,1],
+  [0,1,0,1,-4,1,0,1,0],
+  [1,0,-1,0,0,0,-1,0,1].map(v=>v*1.5)
+];
+let kSlot = 0;
+let stride=1, pad=1, dil=1, step=0, relu=true, poolMode='max', playing=null;
+let l2 = null;  // C2 kernels × C1 slices × 9
+let W = null, B = null; // FC
+let probe = null;       // {stage, rect:[r0,r1,c0,c1], chs:Set|null} | {kind:'gap',f} | {kind:'class',c}
+
+const kPresets = {
+  'Vertical edge (Sobel x)':[-1,0,1,-2,0,2,-1,0,1],
+  'Horizontal edge (Sobel y)':[-1,-2,-1,0,0,0,1,2,1],
+  'Laplacian':[0,1,0,1,-4,1,0,1,0],
+  'Diagonal':[2,0,-2,0,0,0,-2,0,2],
+  'Blur (box)':Array(9).fill(1/9),
+  'Sharpen':[0,-1,0,-1,5,-1,0,-1,0],
+  'Identity':[0,0,0,0,1,0,0,0,0],
+};
+
+// ---------- helpers ----------
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const fmt=v=>{ if(Math.abs(v)<1e-9) return '0'; const s=v.toFixed(2); return s.replace(/\.?0+$/,''); };
+const isDark=()=> document.documentElement.dataset.theme==='dark' || (matchMedia('(prefers-color-scheme: dark)').matches && document.documentElement.dataset.theme!=='light');
+const cssVar=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function divColor(v, scale){
+  const t = clamp(v/scale,-1,1);
+  const neg=[42,111,214], pos=[229,100,30];
+  const zero = isDark()? [42,47,56] : [243,244,241];
+  const c = t<0? neg : pos, a=Math.abs(t);
+  return `rgb(${zero.map((z,i)=>Math.round(z+(c[i]-z)*a)).join(',')})`;
+}
+function grayColor(v){ const g = isDark() ? 40+v*200 : 245-v*225; return `rgb(${g|0},${g|0},${g|0})`; }
+function outSize(n){ return Math.floor((n + 2*pad - dil*(K-1) - 1)/stride) + 1; }
+const maxAbs=m=>Math.max(0.01,...Array.from(m,Math.abs));
+
+const layouts = new WeakMap(); // canvas -> {cell,ox,oy,w,h}
+function drawGrid(cv, data, w, h, o={}){
+  const ctx=cv.getContext('2d'); const Wd=cv.width, Hd=cv.height;
+  ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,Wd,Hd);
+  const cell=Math.floor(Math.min(Wd/w,Hd/h)); const ox=Math.floor((Wd-cell*w)/2), oy=Math.floor((Hd-cell*h)/2);
+  layouts.set(cv,{cell,ox,oy,w,h});
+  const scale=o.scale||1;
+  for(let r=0;r<h;r++)for(let c=0;c<w;c++){
+    const v=data[r*w+c];
+    ctx.fillStyle = o.mode==='div'? divColor(v,scale) : grayColor(v);
+    ctx.fillRect(ox+c*cell,oy+r*cell,cell,cell);
+  }
+  ctx.strokeStyle=cssVar('--line'); ctx.lineWidth=1;
+  for(let r=0;r<=h;r++){ctx.beginPath();ctx.moveTo(ox,oy+r*cell+.5);ctx.lineTo(ox+w*cell,oy+r*cell+.5);ctx.stroke();}
+  for(let c=0;c<=w;c++){ctx.beginPath();ctx.moveTo(ox+c*cell+.5,oy);ctx.lineTo(ox+c*cell+.5,oy+h*cell);ctx.stroke();}
+  if(o.padBorder){ ctx.strokeStyle='rgba(128,128,128,.9)'; ctx.setLineDash([3,3]);
+    ctx.strokeRect(ox+pad*cell+.5,oy+pad*cell+.5,(w-2*pad)*cell,(h-2*pad)*cell); ctx.setLineDash([]); }
+  if(o.labels && cell>=22){
+    ctx.font=`${Math.max(9,cell*0.36)}px ${getComputedStyle(document.body).fontFamily}`; ctx.textAlign='center'; ctx.textBaseline='middle';
+    for(let r=0;r<h;r++)for(let c=0;c<w;c++){
+      const v=data[r*w+c]; const strong = o.mode==='div' ? Math.abs(v/scale)>.55 : (isDark()? v<.5 : v>.5);
+      ctx.fillStyle = strong? '#fff' : cssVar('--ink');
+      if(o.mode!=='div' && !strong && !isDark()) ctx.fillStyle='#333';
+      ctx.fillText(fmt(v), ox+c*cell+cell/2, oy+r*cell+cell/2);
+    }
+  }
+  const hl=cssVar('--hl'), hl2=cssVar('--hl2');
+  if(o.taps){ ctx.strokeStyle=hl; ctx.lineWidth=3; o.taps.forEach(([r,c])=>ctx.strokeRect(ox+c*cell+1.5,oy+r*cell+1.5,cell-3,cell-3)); }
+  if(o.cell){ ctx.strokeStyle=hl; ctx.lineWidth=3; ctx.strokeRect(ox+o.cell[1]*cell+1.5,oy+o.cell[0]*cell+1.5,cell-3,cell-3); }
+  if(o.rect){ const [r0,r1,c0,c1]=o.rect; ctx.strokeStyle=hl2; ctx.lineWidth=Math.max(2,Math.min(3,cell/6));
+    const lw=ctx.lineWidth/2; ctx.strokeRect(ox+c0*cell+lw,oy+r0*cell+lw,(c1-c0+1)*cell-2*lw,(r1-r0+1)*cell-2*lw);
+    ctx.fillStyle=hl2; ctx.globalAlpha=.18; ctx.fillRect(ox+c0*cell,oy+r0*cell,(c1-c0+1)*cell,(r1-r0+1)*cell); ctx.globalAlpha=1; }
+  if(o.outline){ cv.style.outline=`3px solid ${hl2}`; cv.style.outlineOffset='2px'; } else cv.style.outline='';
+}
+function cellAt(cv, ev){ const L=layouts.get(cv); if(!L) return null; const rect=cv.getBoundingClientRect(); const sx=rect.width/cv.width;
+  const c=Math.floor((ev.clientX-rect.left-L.ox*sx)/(L.cell*sx)), r=Math.floor((ev.clientY-rect.top-L.oy*sx)/(L.cell*sx));
+  return (r>=0&&c>=0&&r<L.h&&c<L.w)?[r,c]:null; }
+function hoverable(cv, stage, ch){ // register receptive-field probing
+  cv.addEventListener('pointermove',ev=>{ const p=cellAt(cv,ev); const np = p? {stage,rect:[p[0],p[0],p[1],p[1]],ch} : null;
+    if(JSON.stringify(np)!==JSON.stringify(probe)){ probe=np; renderAll(); } });
+  cv.addEventListener('pointerleave',()=>{ if(probe){ probe=null; renderAll(); } });
+}
+
+// ---------- compute ----------
+function padded(src,n){ const P=n+2*pad, out=new Float32Array(P*P);
+  for(let r=0;r<n;r++)for(let c=0;c<n;c++) out[(r+pad)*P+c+pad]=src[r*n+c]; return out; }
+function conv(src,n,ker){ const P=n+2*pad, pin=padded(src,n), O=outSize(n), out=new Float32Array(O*O);
+  for(let i=0;i<O;i++)for(let j=0;j<O;j++){ let s=0;
+    for(let a=0;a<K;a++)for(let b=0;b<K;b++) s+=pin[(i*stride+a*dil)*P + j*stride+b*dil]*ker[a*K+b];
+    out[i*O+j]=s; } return {out,O,pin,P}; }
+function act(m){ return relu? m.map(v=>Math.max(0,v)) : m; }
+function pool(m,O){ const Q=Math.max(1,Math.floor(O/2)), out=new Float32Array(Q*Q);
+  for(let i=0;i<Q;i++)for(let j=0;j<Q;j++){ const g=(r,c)=> (r<O&&c<O)? m[r*O+c] : (poolMode==='max'?-Infinity:0);
+    const v=[g(2*i,2*j),g(2*i,2*j+1),g(2*i+1,2*j),g(2*i+1,2*j+1)].filter(x=>x!==-Infinity);
+    out[i*Q+j]= poolMode==='max'? Math.max(...v) : v.reduce((a,b)=>a+b)/v.length; } return {out,Q}; }
+function conv1ch(src,n,ker){ const out=new Float32Array(n*n);
+  for(let i=0;i<n;i++)for(let j=0;j<n;j++){ let s=0;
+    for(let a=0;a<K;a++)for(let b=0;b<K;b++){ const r=i+a-1,c=j+b-1; if(r<0||c<0||r>=n||c>=n) continue; s+=src[r*n+c]*ker[a*K+b]; }
+    out[i*n+j]=s; } return out; }
+
+function forward(){
+  const S={};
+  S.O=outSize(N); S.P=N+2*pad; S.pin=padded(input,N);
+  S.c1=bank.map(k=>conv(input,N,k).out); S.a1=S.c1.map(act); S.p1=S.a1.map(m=>pool(m,S.O).out); S.Q=pool(S.a1[0],S.O).Q;
+  S.parts=l2.map(ker=>ker.map((sl,f)=>conv1ch(S.p1[f],S.Q,sl)));
+  S.c2=S.parts.map(ps=>{ const acc=new Float32Array(S.Q*S.Q); ps.forEach(p=>{for(let q=0;q<acc.length;q++)acc[q]+=p[q];}); return acc; });
+  S.a2=S.c2.map(act); S.p2=S.a2.map(m=>pool(m,S.Q).out); S.Q2=pool(S.a2[0],S.Q).Q;
+  S.gap=S.p2.map(m=>m.reduce((a,b)=>a+b,0)/m.length);
+  S.logits=Array.from({length:NC},(_,c)=>S.gap.reduce((s,g,f)=>s+g*W[f][c],B[c]));
+  const mx=Math.max(...S.logits); const ex=S.logits.map(v=>Math.exp(v-mx)); const Z=ex.reduce((a,b)=>a+b); S.prob=ex.map(v=>v/Z);
+  return S;
+}
+
+// receptive-field propagation: returns rects per stage + which channel sets are lit
+function footprint(S){
+  const R={}; if(!probe) return R;
+  let st, rect, chs;
+  if(probe.kind==='gap'){ st='pool2'; rect=[0,S.Q2-1,0,S.Q2-1]; chs=new Set([probe.f]); }
+  else if(probe.kind==='class'){ st='pool2'; rect=[0,S.Q2-1,0,S.Q2-1]; chs=null; }
+  else { st=probe.stage; rect=probe.rect.slice(); chs = probe.ch==null? null : new Set([probe.ch]); }
+  R[st]={rect,chs};
+  const order=['pool2','conv2','pool1','conv1'];
+  for(let i=order.indexOf(st); i<order.length; i++){
+    const s=order[i]; let r=R[s].rect;
+    if(s==='pool2'){ r=[2*r[0],Math.min(2*r[1]+1,S.Q-1),2*r[2],Math.min(2*r[3]+1,S.Q-1)]; R.conv2={rect:r,chs:R.pool2.chs}; }
+    else if(s==='conv2'){ r=[clamp(r[0]-1,0,S.Q-1),clamp(r[1]+1,0,S.Q-1),clamp(r[2]-1,0,S.Q-1),clamp(r[3]+1,0,S.Q-1)]; R.pool1={rect:r,chs:null}; }
+    else if(s==='pool1'){ r=[2*r[0],Math.min(2*r[1]+1,S.O-1),2*r[2],Math.min(2*r[3]+1,S.O-1)]; R.conv1={rect:r,chs:R.pool1.chs}; }
+    else if(s==='conv1'){ const e=dil*(K-1); const pr=[r[0]*stride, r[1]*stride+e, r[2]*stride, r[3]*stride+e]; R.padIn={rect:pr};
+      R.input={rect:[clamp(pr[0]-pad,0,N-1),clamp(pr[1]-pad,0,N-1),clamp(pr[2]-pad,0,N-1),clamp(pr[3]-pad,0,N-1)]}; }
+  }
+  return R;
+}
+const lit=(R,st,ch)=> R[st] && (R[st].chs===null || R[st].chs.has(ch)) ? R[st].rect : null;
+
+// ---------- render ----------
+function renderAll(){
+  const S=forward(); const R=footprint(S);
+  const ker=bank[kSlot], out=S.c1[kSlot], O=S.O, Q=S.Q;
+  const total=O*O; step=clamp(step,0,total-1);
+  $('stepSlider').max=total-1; $('stepSlider').value=step;
+  const i=Math.floor(step/O), j=step%O; const scale=maxAbs(out);
+
+  // stage 1
+  drawGrid($('cIn'),input,N,N,{rect:R.input&&R.input.rect});
+  $('shapeMath').textContent =
+`output size = ⌊(N + 2·pad − dil·(k−1) − 1) / stride⌋ + 1
+            = ⌊(${N} + ${2*pad} − ${dil}·${K-1} − 1) / ${stride}⌋ + 1
+            = ${O}
+feature map: ${O}×${O}   (from ${N}×${N})
+effective kernel extent: ${dil*(K-1)+1}×${dil*(K-1)+1}`;
+
+  // stage 2
+  const taps=[]; for(let a=0;a<K;a++)for(let b=0;b<K;b++) taps.push([i*stride+a*dil, j*stride+b*dil]);
+  drawGrid($('cPadIn'),S.pin,S.P,S.P,{padBorder:pad>0,taps,rect:R.padIn&&R.padIn.rect});
+  drawGrid($('cOut'),out,O,O,{mode:'div',scale,cell:[i,j],labels:O<=8,rect:lit(R,'conv1',kSlot)});
+  $('posLbl').textContent=`(${i}, ${j})`;
+  const win=taps.map(([r,c])=>S.pin[r*S.P+c]); const prod=win.map((v,q)=>v*ker[q]); const sum=prod.reduce((a,b)=>a+b,0);
+  drawGrid($('cWin'),win,K,K,{labels:true});
+  drawGrid($('cKer'),ker,K,K,{mode:'div',scale:maxAbs(ker),labels:true});
+  drawGrid($('cProd'),prod,K,K,{mode:'div',scale:maxAbs(prod),labels:true});
+  $('stepMath').innerHTML = `out[${i},${j}] = ${prod.map((p,q)=>`${fmt(win[q])}×${fmt(ker[q])}`).join(' + ')}\n        = <span class="sum">${fmt(sum)}</span>`;
+
+  // stage 3
+  const a=S.a1[kSlot], pl=S.p1[kSlot];
+  drawGrid($('cRaw'),out,O,O,{mode:'div',scale,rect:lit(R,'conv1',kSlot)});
+  drawGrid($('cRelu'),a,O,O,{mode:'div',scale,rect:lit(R,'conv1',kSlot)});
+  drawGrid($('cPool'),pl,Q,Q,{mode:'div',scale:maxAbs(pl),labels:Q<=8,rect:lit(R,'pool1',kSlot)});
+  $('rawShape').textContent=`${O}×${O}`; $('reluShape').textContent=`${O}×${O}`; $('poolShape').textContent=`${Q}×${Q}`;
+  if(probe && probe.stage==='pool1' && probe.ch===kSlot){ const r=probe.rect[0], c=probe.rect[2];
+    const v=[]; for(const [rr,cc] of [[2*r,2*c],[2*r,2*c+1],[2*r+1,2*c],[2*r+1,2*c+1]]) if(rr<O&&cc<O) v.push(a[rr*O+cc]);
+    $('poolMath').textContent=`pool[${r},${c}] = ${poolMode}( ${v.map(fmt).join(', ')} ) = ${fmt(pl[r*Q+c])}`; }
+  else $('poolMath').textContent='hover a pooled cell';
+
+  // stage 4 bank
+  const bankEl=$('bank'); bankEl.innerHTML='';
+  bank.forEach((kk,idx)=>{
+    const d=document.createElement('div');
+    const ck=document.createElement('canvas'); ck.width=ck.height=60; ck.style.cursor='pointer'; ck.title='use this kernel in stages 1–3';
+    const cm=document.createElement('canvas'); cm.width=cm.height=110;
+    drawGrid(ck,kk,K,K,{mode:'div',scale:maxAbs(kk)}); drawGrid(cm,S.p1[idx],Q,Q,{mode:'div',scale:maxAbs(S.p1[idx]),rect:lit(R,'pool1',idx)});
+    hoverable(cm,'pool1',idx);
+    const lab=document.createElement('div'); lab.textContent=`kernel ${idx+1}${idx===kSlot?' (shown above)':''} → map ${idx+1}`;
+    if(idx===kSlot){ ck.style.outline='2px solid var(--accent)'; ck.style.outlineOffset='2px'; }
+    ck.onclick=()=>{ kSlot=idx; syncKgrid(); $('kSlotLbl').textContent=idx+1; renderAll(); };
+    d.append(ck,document.createElement('br'),cm,lab); bankEl.append(d);
+  });
+  // stage 4 layer-2 decomposition (kernel 1)
+  const l2El=$('layer2'); l2El.innerHTML='';
+  const ps=Math.max(...S.parts[0].map(maxAbs));
+  S.parts[0].forEach((part,idx)=>{ const d=document.createElement('div');
+    const ck=document.createElement('canvas'); ck.width=ck.height=60; const cm=document.createElement('canvas'); cm.width=cm.height=110;
+    drawGrid(ck,l2[0][idx],K,K,{mode:'div',scale:maxAbs(l2[0][idx])}); drawGrid(cm,part,Q,Q,{mode:'div',scale:ps,rect:lit(R,'conv2',0)});
+    hoverable(cm,'conv2',0);
+    const lab=document.createElement('div'); lab.textContent=`slice ${idx+1} ⊛ map ${idx+1}`;
+    d.append(ck,document.createElement('br'),cm,lab); l2El.append(d); });
+  const plus=document.createElement('div'); plus.className='eq'; plus.style.alignSelf='center'; plus.textContent='Σ ='; l2El.append(plus);
+  const dOut=document.createElement('div'); const cs=document.createElement('canvas'); cs.width=cs.height=110;
+  drawGrid(cs,S.c2[0],Q,Q,{mode:'div',scale:maxAbs(S.c2[0]),rect:lit(R,'conv2',0)}); hoverable(cs,'conv2',0);
+  const lab=document.createElement('div'); lab.textContent=`layer-2 map 1 (raw) ${Q}×${Q}`;
+  dOut.append(cs,lab); l2El.append(dOut);
+
+  // stage 5 pipeline
+  renderPipe(S,R);
+  // readout
+  const ro=$('rfout');
+  if(R.input){ const [r0,r1,c0,c1]=R.input.rect; const src = probe.kind==='gap'? `global-average entry ${probe.f+1}` : probe.kind==='class'? `class ${probe.c}` : `${probe.stage.replace(/(\d)/,' $1')}${probe.ch!=null?` map ${probe.ch+1}`:''} cell (${probe.rect[0]}, ${probe.rect[2]})`;
+    ro.innerHTML=`<b>${src}</b> sees input rows ${r0}–${r1}, cols ${c0}–${c1}: a <b>${r1-r0+1}×${c1-c0+1}</b> patch of the ${N}×${N} image${R.padIn && (R.padIn.rect[0]<pad||R.padIn.rect[2]<pad||R.padIn.rect[1]>=N+pad||R.padIn.rect[3]>=N+pad)?' (plus zero padding beyond the edge)':''}.`; }
+  else ro.textContent='Hover a cell anywhere in the page to trace its receptive field.';
+}
+
+function renderPipe(S,R){
+  const pipe=$('pipe'); pipe.innerHTML='';
+  const stage=(title,sub)=>{ const d=document.createElement('div'); d.className='stage'; const t=document.createElement('div'); t.className='t'; t.textContent=title; d.append(t); const s=document.createElement('div'); s.className='stack'; d.append(s); if(sub){const c=document.createElement('div'); c.textContent=sub; c.style.marginTop='6px'; d.append(c);} return [d,s]; };
+  const arrow=()=>{ const a=document.createElement('div'); a.className='arrow'; a.textContent='→'; return a; };
+  const mapsCol=(title,maps,n,st,sub,cols)=>{ const [d,s]=stage(title,sub); s.style.gridTemplateColumns=`repeat(${cols},auto)`;
+    const sc=Math.max(...maps.map(maxAbs));
+    maps.forEach((m,idx)=>{ const cv=document.createElement('canvas'); const px= n<=4? 48:72; cv.width=cv.height=px;
+      drawGrid(cv,m,n,n,{mode:'div',scale:sc,rect:lit(R,st,idx),outline: probe&&probe.kind==='gap'&&st==='pool2'&&probe.f===idx});
+      hoverable(cv,st,idx); s.append(cv); }); return d; };
+  pipe.append(mapsCol('pool 1',S.p1,S.Q,'pool1',`4 maps ${S.Q}×${S.Q}`,2), arrow());
+  pipe.append(mapsCol('conv 2 + ReLU',S.a2,S.Q,'conv2',`8 maps ${S.Q}×${S.Q}`,4), arrow());
+  pipe.append(mapsCol('pool 2',S.p2,S.Q2,'pool2',`8 maps ${S.Q2}×${S.Q2}`,4), arrow());
+  // GAP vector
+  { const [d,s]=stage('global average',`vector of 8`); s.style.gridTemplateColumns='auto';
+    const cv=document.createElement('canvas'); cv.width=40; cv.height=8*40; cv.style.cursor='pointer';
+    drawGrid(cv,S.gap,1,C2,{mode:'div',scale:maxAbs(S.gap),labels:true, rect: probe&&probe.kind==='gap'? [probe.f,probe.f,0,0] : null});
+    cv.addEventListener('pointermove',ev=>{ const p=cellAt(cv,ev); const np=p?{kind:'gap',f:p[0]}:null; if(JSON.stringify(np)!==JSON.stringify(probe)){probe=np;renderAll();} });
+    cv.addEventListener('pointerleave',()=>{ if(probe){probe=null;renderAll();} });
+    s.append(cv); pipe.append(d, arrow()); }
+  // FC weights
+  { const [d,s]=stage('FC weights',`8 × 10, plus 10 biases`); s.style.gridTemplateColumns='auto';
+    const flat=new Float32Array(C2*NC); for(let f=0;f<C2;f++)for(let c=0;c<NC;c++) flat[f*NC+c]=W[f][c];
+    const cv=document.createElement('canvas'); cv.width=NC*22; cv.height=C2*22;
+    let rect=null; if(probe&&probe.kind==='gap') rect=[probe.f,probe.f,0,NC-1]; if(probe&&probe.kind==='class') rect=[0,C2-1,probe.c,probe.c];
+    drawGrid(cv,flat,NC,C2,{mode:'div',scale:maxAbs(flat),rect});
+    s.append(cv); const c2=document.createElement('div'); c2.textContent='rows: features · cols: classes'; c2.style.marginTop='4px'; d.append(c2); pipe.append(d, arrow()); }
+  // bars
+  { const [d,s]=stage('scores → softmax','hover a class'); s.style.gridTemplateColumns='auto';
+    const bars=document.createElement('div'); bars.className='bars'; const top=S.prob.indexOf(Math.max(...S.prob));
+    for(let c=0;c<NC;c++){ const lab=document.createElement('div'); lab.className='lab'; lab.textContent=`class ${c}`;
+      const bar=document.createElement('div'); bar.className='bar'+(c===top?' top':'')+(probe&&probe.kind==='class'&&probe.c===c?' hov':''); const i=document.createElement('i'); i.style.width=(S.prob[c]*100)+'%'; bar.append(i);
+      const v=document.createElement('div'); v.className='v'; v.textContent=(S.prob[c]*100).toFixed(1)+'%';
+      [lab,bar,v].forEach(el=>{ el.addEventListener('pointerenter',()=>{ if(!(probe&&probe.kind==='class'&&probe.c===c)){ probe={kind:'class',c}; renderAll(); } }); });
+      bars.append(lab,bar,v); }
+    bars.addEventListener('pointerleave',()=>{ probe=null; renderAll(); });
+    s.append(bars); pipe.append(d); }
+  // head math
+  const hm=$('headMath');
+  if(probe&&probe.kind==='class'){ const c=probe.c; const terms=S.gap.map((g,f)=>`${fmt(g)}×${fmt(W[f][c])}`).join(' + ');
+    hm.innerHTML=`score[${c}] = Σ_f gap[f]·W[f,${c}] + b[${c}]\n         = ${terms} + ${fmt(B[c])}\n         = <span class="sum">${fmt(S.logits[c])}</span>\nsoftmax  = exp(score[${c}]) / Σ_k exp(score[k]) = <span class="sum">${(S.prob[c]*100).toFixed(1)}%</span>`; }
+  else if(probe&&probe.kind==='gap'){ const f=probe.f; hm.innerHTML=`gap[${f+1}] = mean of pool-2 map ${f+1} (${S.Q2}×${S.Q2} = ${S.Q2*S.Q2} values) = <span class="sum">${fmt(S.gap[f])}</span>\nfeeds every class through row ${f+1} of W (highlighted)`; }
+  else hm.textContent=`scores = gap · W + b        (8 values × 8×10 matrix + 10 biases → 10 scores)\nprob   = softmax(scores)    hover a class bar or a vector entry for the actual numbers`;
+}
+
+// ---------- kernel UI ----------
+function syncKgrid(){ [...$('kgrid').children].forEach((inp,q)=>inp.value=fmt(bank[kSlot][q])); }
+for(let q=0;q<9;q++){ const inp=document.createElement('input'); inp.type='text'; inp.inputMode='decimal';
+  inp.onchange=()=>{ const v=parseFloat(inp.value); bank[kSlot][q]=isNaN(v)?0:v; inp.value=fmt(bank[kSlot][q]); renderAll(); };
+  $('kgrid').append(inp); }
+Object.keys(kPresets).forEach(k=>{ const o=document.createElement('option'); o.textContent=k; $('kPreset').append(o); });
+$('kPreset').onchange=e=>{ bank[kSlot]=kPresets[e.target.value].slice(); syncKgrid(); renderAll(); };
+$('kRand').onclick=()=>{ bank[kSlot]=Array.from({length:9},()=>+(Math.random()*2-1).toFixed(2)); syncKgrid(); renderAll(); };
+const rnd=(n,s=1)=>Array.from({length:n},()=>+((Math.random()*2-1)*s).toFixed(2));
+function rerollL2(){ l2=Array.from({length:C2},()=>Array.from({length:C1},()=>rnd(9))); }
+function rerollFC(){ W=Array.from({length:C2},()=>rnd(NC,0.6)); B=rnd(NC,0.3); }
+$('l2Rand').onclick=()=>{ rerollL2(); renderAll(); };
+$('fcRand').onclick=()=>{ rerollFC(); renderAll(); };
+
+// ---------- input UI ----------
+const inPresets={
+  'Clear':()=>input.fill(0),
+  '7':()=>{ input.fill(0); for(let c=3;c<13;c++) set(3,c,1); for(let r=4;r<14;r++){ const c=12-Math.round((r-4)*0.7); set(r,c,1); set(r,c-1,.6);} },
+  '0':()=>{ input.fill(0); for(let r=0;r<N;r++)for(let c=0;c<N;c++){ const d=Math.hypot((r-7.5)/5,(c-7.5)/3.6); const v=1-Math.abs(d-1)*3; if(v>0) set(r,c,Math.min(1,v)); } },
+  'Cross':()=>{ input.fill(0); for(let r=0;r<N;r++){ set(r,7,1); set(r,8,1); set(7,r,1); set(8,r,1);} },
+  'Diagonal':()=>{ input.fill(0); for(let r=0;r<N;r++){ set(r,r,1); if(r<N-1) set(r,r+1,.5);} },
+  'Square':()=>{ input.fill(0); for(let r=4;r<12;r++)for(let c=4;c<12;c++) set(r,c,1); },
+  'Noise':()=>{ for(let q=0;q<N*N;q++) input[q]=Math.random(); },
+};
+function set(r,c,v){ if(r>=0&&c>=0&&r<N&&c<N) input[r*N+c]=v; }
+Object.entries(inPresets).forEach(([name,fn])=>{ const b=document.createElement('button'); b.textContent=name; b.onclick=()=>{ fn(); renderAll(); }; $('inPresets').append(b); });
+let painting=false, erase=false;
+function paintAt(ev){ const p=cellAt($('cIn'),ev); if(!p) return; const [r,c]=p;
+  set(r,c, erase?0:1); if(!erase){ set(r+1,c,Math.max(input[(r+1)*N+c]||0,.4)); set(r,c+1,Math.max(input[r*N+c+1]||0,.4)); } else { set(r+1,c,0); set(r,c+1,0); } renderAll(); }
+$('cIn').addEventListener('pointerdown',ev=>{ painting=true; erase=ev.button===2||ev.shiftKey; $('cIn').setPointerCapture(ev.pointerId); paintAt(ev); });
+$('cIn').addEventListener('pointermove',ev=>{ if(painting) paintAt(ev); });
+$('cIn').addEventListener('pointerup',()=>painting=false);
+$('cIn').addEventListener('contextmenu',ev=>ev.preventDefault());
+
+// ---------- controls ----------
+$('stride').onchange=e=>{ stride=+e.target.value; step=0; renderAll(); };
+$('pad').onchange=e=>{ pad=+e.target.value; step=0; renderAll(); };
+$('dil').onchange=e=>{ dil=+e.target.value; step=0; renderAll(); };
+$('stepSlider').oninput=e=>{ step=+e.target.value; renderAll(); };
+$('prev').onclick=()=>{ step--; renderAll(); };
+$('next').onclick=()=>{ step=(step+1)%(outSize(N)**2); renderAll(); };
+function stopPlay(){ clearInterval(playing); playing=null; $('play').textContent='Play'; }
+$('play').onclick=()=>{ if(playing){ stopPlay(); return; } $('play').textContent='Pause';
+  playing=setInterval(()=>{ const t=outSize(N)**2; step=(step+1)%t; renderAll(); if(step===t-1) stopPlay(); }, +$('speed').value); };
+$('speed').onchange=()=>{ if(playing){ stopPlay(); $('play').click(); } };
+$('actRelu').onclick=()=>{ relu=true; $('actRelu').classList.add('sel'); $('actNone').classList.remove('sel'); renderAll(); };
+$('actNone').onclick=()=>{ relu=false; $('actNone').classList.add('sel'); $('actRelu').classList.remove('sel'); renderAll(); };
+$('poolMax').onclick=()=>{ poolMode='max'; $('poolMax').classList.add('sel'); $('poolAvg').classList.remove('sel'); renderAll(); };
+$('poolAvg').onclick=()=>{ poolMode='avg'; $('poolAvg').classList.add('sel'); $('poolMax').classList.remove('sel'); renderAll(); };
+// static canvases with receptive-field probing
+[['cOut','conv1'],['cRaw','conv1'],['cRelu','conv1'],['cPool','pool1']].forEach(([id,st])=>{ const cv=$(id);
+  cv.addEventListener('pointermove',ev=>{ const p=cellAt(cv,ev); const np=p?{stage:st,rect:[p[0],p[0],p[1],p[1]],ch:kSlot}:null;
+    if(JSON.stringify(np)!==JSON.stringify(probe)){probe=np;renderAll();} });
+  cv.addEventListener('pointerleave',()=>{ if(probe){probe=null;renderAll();} }); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',renderAll);
+
+// ---------- terms ----------
+const TERMS = [
+  ['kernel', /\bkernel\b/i, 'Kernel (filter)', 'A small grid of weights, 3×3 here, that is slid over the input. Its values are learned parameters: training changes them. Each kernel produces one feature map.'],
+  ['weights', /\bweights\b/i, 'Weights / parameters', 'The numbers a network learns: every kernel value and every FC entry. Nothing else on this page is learned — ReLU, pooling, global averaging and softmax are fixed arithmetic.'],
+  ['feature map', /\bfeature map\b/i, 'Feature map', 'The output grid of one kernel: at each position, how strongly the kernel\'s pattern matches the input there. Positive = looks like the pattern, negative = looks like its opposite.'],
+  ['channel', /\bchannels?\b/i, 'Channel', 'One of the stacked maps at a given stage. An RGB image has 3 channels; after a layer with 8 kernels there are 8. The "C" in H×W×C.'],
+  ['stride', /\bstride\b/i, 'Stride', 'How many pixels the window moves between neighbouring outputs. Stride 2 halves the output size and makes each output cell cover twice the input width.'],
+  ['padding', /\bpadding\b/i, 'Padding', 'A ring of zeros added around the input so the window can be centred on edge pixels. Padding 1 with a 3×3 kernel keeps the output the same size as the input.'],
+  ['dilation', /\bdilation\b/i, 'Dilation', 'Spacing between the kernel taps. Dilation 2 reads every second pixel, so a 3×3 kernel spans a 5×5 patch with the same 9 weights.'],
+  ['relu', /\bReLU\b/, 'ReLU', 'Rectified linear unit: max(0, x). Keeps positive responses, replaces negative ones with zero. This is the nonlinearity that stops stacked layers from collapsing into one.'],
+  ['pool', /\b(max-?pool(ing)?|pooling)\b/i, 'Pooling', 'Shrinks a map by summarising each 2×2 block with one number (its max or mean). Halves height and width; no learned parameters. Keeps the strongest response, drops exactly where it was.'],
+  ['gap', /\bglobal average(?: pooling)?\b/i, 'Global average pooling', 'Averages each channel over all positions, turning an H×W×C block into a vector of C numbers: "how much of each pattern, anywhere". Removes spatial layout entirely.'],
+  ['fc', /\b(fully connected(?: \(FC\))?(?: layer)?|FC)\b/, 'Fully connected (FC) layer', 'Also called dense or linear. Every input value connects to every output value through its own weight: 8 inputs × 10 outputs = 80 weights plus 10 biases. Output = input · W + b. The weights are learned parameters, like kernels; on this page they are random.'],
+  ['bias', /\bbias(es)?\b/i, 'Bias', 'A constant added to each output of a layer: one per output, learned. It shifts a score up or down regardless of the input.'],
+  ['score', /\bclass scores?\b/i, 'Score (logit)', 'The raw output of the FC layer for one class, before softmax. Can be any real number; higher means the network favours that class.'],
+  ['softmax', /\bsoftmax\b/i, 'Softmax', 'Turns scores into probabilities: p_k = exp(s_k) / Σ exp(s_j). All outputs are positive and sum to 1; the largest score gets the largest share, and gaps between scores are exaggerated.'],
+  ['rf', /\breceptive field\b/i, 'Receptive field', 'The patch of the input that can influence one value in a later map. Grows with every conv and every pool; the green boxes trace it.'],
+  ['training', /\btraining\b/i, 'Training', 'Showing the network many labelled images and nudging every weight so the correct class score rises. This page skips it; the weights are random or hand-picked, but the forward pass is identical.'],
+];
+const termById = Object.fromEntries(TERMS.map(t=>[t[0],t]));
+function linkTerms(){
+  document.querySelectorAll('.lede, .head p, .note').forEach(el=>{
+    const seen=new Set();
+    const walker=document.createTreeWalker(el,NodeFilter.SHOW_TEXT); const nodes=[]; while(walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach(node=>{
+      if(node.parentNode.closest('dfn,.n')) return;
+      let text=node.nodeValue;
+      for(const [id,re] of TERMS.map(t=>[t[0],t[1]])){
+        if(seen.has(id)) continue; const m=re.exec(text); if(!m) continue;
+        seen.add(id);
+        const before=document.createTextNode(text.slice(0,m.index));
+        const d=document.createElement('dfn'); d.dataset.t=id; d.tabIndex=0; d.textContent=m[0];
+        const after=document.createTextNode(text.slice(m.index+m[0].length));
+        node.parentNode.insertBefore(before,node); node.parentNode.insertBefore(d,node); node.parentNode.replaceChild(after,node);
+        node=after; text=after.nodeValue;
+      }
+    });
+  });
+}
+const tip=$('tip');
+function showTip(d){ const t=termById[d.dataset.t]; tip.innerHTML=`<b>${t[2]}</b>${t[3]}`; tip.style.display='block';
+  const r=d.getBoundingClientRect(); const w=tip.offsetWidth, h=tip.offsetHeight;
+  let x=clamp(r.left, 8, innerWidth-w-8), y=r.bottom+8; if(y+h>innerHeight-8) y=r.top-h-8; tip.style.left=x+'px'; tip.style.top=y+'px'; }
+function hideTip(){ tip.style.display='none'; }
+document.addEventListener('pointerover',e=>{ const d=e.target.closest&&e.target.closest('dfn'); if(d) showTip(d); });
+document.addEventListener('pointerout',e=>{ if(e.target.closest&&e.target.closest('dfn')) hideTip(); });
+document.addEventListener('focusin',e=>{ const d=e.target.closest&&e.target.closest('dfn'); if(d) showTip(d); });
+document.addEventListener('focusout',e=>{ if(e.target.closest&&e.target.closest('dfn')) hideTip(); });
+document.addEventListener('click',e=>{ const d=e.target.closest&&e.target.closest('dfn'); if(d){ if(tip.style.display==='block'&&tip.dataset.for===d.dataset.t){hideTip();tip.dataset.for='';} else {showTip(d);tip.dataset.for=d.dataset.t;} } else { hideTip(); tip.dataset.for=''; } });
+$('gloss').innerHTML = TERMS.map(t=>`<div><b>${t[2]}</b> — ${t[3]}</div>`).join('');
+// parameter ledger
+function renderLedger(){
+  const l1=K*K*C1, l2n=K*K*C1*C2, fc=C2*NC, bias=NC; const mx=Math.max(l1,l2n,fc);
+  const cell=(name,n,sub,none)=>`<div class="p${none?' none':''}"><b>${n}</b><i style="width:${Math.max(6,100*n/mx)}%"></i>${name}<br><span>${sub}</span></div>`;
+  $('ledger').innerHTML = `<div style="flex:1 1 100%;margin-bottom:-6px">Learned parameters in this network, and where they sit:</div>`
+    + cell('layer-1 kernels',l1,`${C1} kernels × 3×3`) + cell('layer-2 kernels',l2n,`${C2} kernels × 3×3×${C1}`) + cell('FC weights',fc,`${C2} × ${NC}`) + cell('FC biases',bias,`one per class`)
+    + cell('ReLU · pooling · global average · softmax',0,'fixed arithmetic, nothing learned',true);
+}
+linkTerms(); renderLedger();
+
+// ---------- init ----------
+inPresets['7'](); rerollL2(); rerollFC(); syncKgrid(); renderAll();
+})();
+</script>
+</body>
+</html>
