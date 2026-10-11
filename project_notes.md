@@ -1,9 +1,12 @@
 # DL explorer (Visualise models): project notes
-Last updated: 2026-10-12, by a working session: repo imported from the claude.ai artifacts, first commit, notes created.
+Last updated: 2026-10-12, by a working session: Intent recorded in Alexy's words; work continues from the repo.
 
 ## Intent
 _Alexy's words. Changed only when Alexy asks, directly or by pointing to a court point._
-Not recorded yet: the first court will capture it.
+- **Purpose:** "visualize DL models, and later on maybe ML models, in an intuitive and interactive way"
+- **What a good result looks like:** "A good result is based on the artifacts developed on the online claude session. Building on this, a good result is a bigger tool which allows us to switch between models and representation (side-by-side or depth, 2D or 3D) and develop a good intuition on what different model architectures are, their strength and limitations."
+- **Constraints and must-nots:** "should look the same as the artifacts created in the online claude session"
+- **Who it is for:** Not stated yet.
 
 ## As built
 _Kept up to date by Claude._
@@ -24,6 +27,7 @@ Interactive web pages, with no build step, that show what the boxes in a deep-le
 ### Decisions
 - 2026-10-12: The repo lives at `C:\Users\LouisA\repos\dl-explorer`, not in the OneDrive project folder. Why: Windows Controlled Folder Access (IT policy, enforced since 2026-09-23) blocks git, node, python and every other shell tool from writing under OneDrive Documents; only Claude's Write/Edit tools can write there. The OneDrive folder keeps the original zip and a pointer README.
 - 2026-10-12: First commit imports the artifact export unchanged, so the pages on `main` are exactly the published artifacts. Why: a clean baseline before the shared-module refactor.
+- 2026-10-12: VS Code and Claude Code are opened on the repo, not on the OneDrive folder, from here on. Why: Alexy, after the port ("I'll continue on the proper folder afterwards"); notes and Claude memory live with the repo.
 - Carried over from the artifact sessions (HANDOFF.md, "Decisions already taken"): the 3D second view is stages along depth with connections, not volumetric 3D convolution; head wiring links only direct neighbours (an average to its own pool-2 map, a class to the 8 averages); no shape/parameter table, the proportional ledger replaced it; padding is not drawn as cubes in 3D, the layer-1 window overhangs the input instead; layer-1 kernels are Sobel-x, Sobel-y, Laplacian and diagonal, layer 2 and the FC are random with reroll buttons.
 
 ### Map
@@ -40,6 +44,5 @@ Interactive web pages, with no build step, that show what the boxes in a deep-le
 Imported and committed on 2026-10-12 (commit 6a95715), not pushed, no GitHub remote yet. Next, in HANDOFF.md order: (1) wire both pages to `core/cnn.js` with no change in behaviour, checked in the browser and with the node test; (2) rough edges: in the 3D depth layout the input occludes deeper stages from the default angle, the 3D page lacks the Terms tooltips, 3D pooling is max only; (3) ideas: trained LeNet-style weights exported to `models/`, 28×28 input, shared input state between the pages; (4) ViT, ConvNeXt and CoAtNet pages reusing the same interaction grammar.
 
 ## Open questions and known gaps
-- Intent is not recorded; a proposed Intent from Alexy's 2026-10-12 words was read back in the session reply and waits for agreement.
-- Where VS Code is opened decides where notes and Claude memory live: the repo (as for Lidar_Maps) or the OneDrive folder. Recommended: the repo.
+- Intent does not say who the tool is for; the first court can capture it.
 - No GitHub repo yet; the name, visibility and the Pages source ("GitHub Actions") are Alexy's call before the first push.
