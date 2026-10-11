@@ -1,5 +1,5 @@
 # DL explorer (Visualise models): project notes
-Last updated: 2026-10-12, by a working session: HANDOFF steps 1 (pages wired to `core/cnn.js`) and 2 (rough edges: 3D depth camera, terms on the 3D page, 3D pooling toggle, 2D padding default) done.
+Last updated: 2026-10-12, by a working session: HANDOFF steps 1 (pages wired to `core/cnn.js`) and 2 (rough edges: 3D depth camera, terms on the 3D page, 3D pooling toggle, 2D padding default) done; published to GitHub Pages.
 
 ## Intent
 _Alexy's words. Changed only when Alexy asks, directly or by pointing to a court point._
@@ -37,10 +37,12 @@ Interactive web pages, with no build step, that show what the boxes in a deep-le
 - 2026-10-12: `linkTerms` links each term at its first occurrence, in order of appearance, instead of in `TERMS` order within the text left after the previous match. Why: the old order skipped terms ("receptive field" in the 3D lede came before "kernel" and was never linked); the 2D page gained 11 dotted terms from the change.
 - 2026-10-12: The depth-layout default camera looks from the input end, high and nearly head-on, not from the output end looking back (the handoff offered both). Why: from the output end, perspective shrinks the far input and reverses the funnel the lede describes; from high up the funnel reads as a staircase and nothing occludes.
 - 2026-10-12: The 2D padding dropdown marks 1 as selected. Why: it showed 0 while the model computed with 1.
+- 2026-10-12: Public GitHub repo `Smooth-Cactus0/Visualising-AI`, deployed with GitHub Pages from `main`. The name is Alexy's "Visualising AI" with GitHub's own space-to-hyphen conversion. Why: Pages is free for public repos; a private repo would need a paid plan.
 - Carried over from the artifact sessions (HANDOFF.md, "Decisions already taken"): the 3D second view is stages along depth with connections, not volumetric 3D convolution; head wiring links only direct neighbours (an average to its own pool-2 map, a class to the 8 averages); no shape/parameter table, the proportional ledger replaced it; padding is not drawn as cubes in 3D, the layer-1 window overhangs the input instead; layer-1 kernels are Sobel-x, Sobel-y, Laplacian and diagonal, layer 2 and the FC are random with reroll buttons.
 
 ### Map
-- Repo (git, branch `main`, no remote yet): `C:\Users\LouisA\repos\dl-explorer`
+- Repo (git, branch `main`): `C:\Users\LouisA\repos\dl-explorer`; remote `origin` = GitHub `Smooth-Cactus0/Visualising-AI` (public)
+- Published site (GitHub Pages, deployed from `main` by the workflow on every push): https://smooth-cactus0.github.io/Visualising-AI/
 - OneDrive project folder (original zip and a pointer README, no code): `C:\Users\LouisA\OneDrive - MWLR\Documents\Side projects\Visualise models`
 - 2D page: `cnn-2d/index.html`; 3D page: `cnn-3d/index.html`; landing page: `index.html`
 - Shared model core and its test: `core/cnn.js`, `core/cnn.test.mjs`
@@ -51,8 +53,7 @@ Interactive web pages, with no build step, that show what the boxes in a deep-le
 - Trained weights (planned, empty): `models/`
 
 ### Status
-Imported 2026-10-12 (commit 6a95715); both pages wired to `core/cnn.js` the same day (commit a09b700, HANDOFF step 1), then the step-2 rough edges fixed (3D depth camera, terms on the 3D page, 3D pooling toggle, 2D padding default). Not pushed, no GitHub remote yet. Next, in HANDOFF.md order: (3) ideas: trained LeNet-style weights exported to `models/`, 28×28 input, shared input state between the pages; (4) ViT, ConvNeXt and CoAtNet pages reusing the same interaction grammar.
+Imported 2026-10-12 (commit 6a95715); both pages wired to `core/cnn.js` the same day (commit a09b700, HANDOFF step 1), then the step-2 rough edges fixed (3D depth camera, terms on the 3D page, 3D pooling toggle, 2D padding default). Pushed to GitHub (`Smooth-Cactus0/Visualising-AI`, public) and deployed with GitHub Pages on 2026-10-12. Next, in HANDOFF.md order: (3) ideas: trained LeNet-style weights exported to `models/`, 28×28 input, shared input state between the pages; (4) ViT, ConvNeXt and CoAtNet pages reusing the same interaction grammar.
 
 ## Open questions and known gaps
 - Intent does not say who the tool is for; the first court can capture it.
-- No GitHub repo yet; the name, visibility and the Pages source ("GitHub Actions") are Alexy's call before the first push.
