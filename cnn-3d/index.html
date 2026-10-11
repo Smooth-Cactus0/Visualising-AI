@@ -104,9 +104,9 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 </main>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script>
-(() => {
-const N=16, K=3, C1=4, C2=8, NC=10;
+<script type="module">
+import { K, forward as forwardCore, footprint as footprintCore, defaultBank, inputPresets } from '../core/cnn.js';
+const N=16, C1=4, C2=8, NC=10;
 const $=id=>document.getElementById(id);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const fmt=v=>{ if(Math.abs(v)<1e-9) return '0'; return v.toFixed(2).replace(/\.?0+$/,''); };
@@ -115,32 +115,14 @@ const cssVar=n=>getComputedStyle(document.documentElement).getPropertyValue(n).t
 
 // ---------- model ----------
 const input=new Float32Array(N*N);
-const bank=[[-1,0,1,-2,0,2,-1,0,1],[-1,-2,-1,0,0,0,1,2,1],[0,1,0,1,-4,1,0,1,0],[1.5,0,-1.5,0,0,0,-1.5,0,1.5]];
+const bank=defaultBank.map(k=>k.slice()); // layer-1 kernels: hand-picked edge detectors
 let stride=1,pad=1,dil=1,explode=0.7;
 let l2=null,W=null,B=null;
 const rnd=(n,s=1)=>Array.from({length:n},()=>+((Math.random()*2-1)*s).toFixed(2));
 function rerollL2(){ l2=Array.from({length:C2},()=>Array.from({length:C1},()=>rnd(9))); }
 function rerollFC(){ W=Array.from({length:C2},()=>rnd(NC,0.6)); B=rnd(NC,0.3); }
-const outSize=n=>Math.floor((n+2*pad-dil*(K-1)-1)/stride)+1;
-function conv(src,n,ker){ const P=n+2*pad, O=outSize(n), out=new Float32Array(O*O);
-  const g=(r,c)=> (r>=0&&c>=0&&r<n&&c<n)? src[r*n+c] : 0;
-  for(let i=0;i<O;i++)for(let j=0;j<O;j++){ let s=0;
-    for(let a=0;a<K;a++)for(let b=0;b<K;b++) s+=g(i*stride+a*dil-pad, j*stride+b*dil-pad)*ker[a*K+b];
-    out[i*O+j]=s; } return {out,O}; }
-const relu=m=>m.map(v=>Math.max(0,v));
-function pool(m,O){ const Q=Math.max(1,Math.floor(O/2)), out=new Float32Array(Q*Q);
-  for(let i=0;i<Q;i++)for(let j=0;j<Q;j++){ let mx=-Infinity; for(const [r,c] of [[2*i,2*j],[2*i,2*j+1],[2*i+1,2*j],[2*i+1,2*j+1]]) if(r<O&&c<O) mx=Math.max(mx,m[r*O+c]); out[i*Q+j]=mx; } return {out,Q}; }
-function conv1ch(src,n,ker){ const out=new Float32Array(n*n);
-  for(let i=0;i<n;i++)for(let j=0;j<n;j++){ let s=0; for(let a=0;a<K;a++)for(let b=0;b<K;b++){ const r=i+a-1,c=j+b-1; if(r<0||c<0||r>=n||c>=n) continue; s+=src[r*n+c]*ker[a*K+b]; } out[i*n+j]=s; } return out; }
 let S=null;
-function forward(){ const s={}; s.O=outSize(N);
-  s.c1=bank.map(k=>conv(input,N,k).out); s.a1=s.c1.map(relu); s.Q=pool(s.a1[0],s.O).Q; s.p1=s.a1.map(m=>pool(m,s.O).out);
-  s.parts=l2.map(ker=>ker.map((sl,f)=>conv1ch(s.p1[f],s.Q,sl)));
-  s.c2=s.parts.map(ps=>{ const acc=new Float32Array(s.Q*s.Q); ps.forEach(p=>{for(let q=0;q<acc.length;q++)acc[q]+=p[q];}); return acc; });
-  s.a2=s.c2.map(relu); s.Q2=pool(s.a2[0],s.Q).Q; s.p2=s.a2.map(m=>pool(m,s.Q).out);
-  s.gap=s.p2.map(m=>m.reduce((a,b)=>a+b,0)/m.length);
-  s.logits=Array.from({length:NC},(_,c)=>s.gap.reduce((t,g,f)=>t+g*W[f][c],B[c]));
-  const mx=Math.max(...s.logits), ex=s.logits.map(v=>Math.exp(v-mx)), Z=ex.reduce((a,b)=>a+b); s.prob=ex.map(v=>v/Z); return s; }
+function forward(){ return forwardCore({input,N,bank,l2,W,B,stride,pad,dil}); } // ReLU, max pooling; the maths lives in ../core/cnn.js
 const maxAbs=arrs=>Math.max(0.01,...arrs.flatMap(a=>Array.from(a,Math.abs)));
 
 // ---------- three ----------
@@ -229,23 +211,15 @@ function boxSpanZ(b,r0,r1,c0,c1,ch0,ch1,group,fillMat,edgeMat){ // one box spann
   const m=new THREE.Mesh(g,fillMat); m.position.set((p0.x+p1.x)/2,(p0.y+p1.y)/2,(p0.z+p1.z)/2); group.add(m);
   const e=new THREE.LineSegments(new THREE.EdgesGeometry(g),edgeMat); e.position.copy(m.position); group.add(e); }
 
-// receptive field (same logic as 2D page)
-let probe=null; // {stage,r,c,ch} | {stage:'gap',ch} | {stage:'scores'}
+// receptive field (propagation in ../core/cnn.js)
+let probe=null; // {stage,r,c,ch} | {stage:'gap',ch} | {stage:'scores',r} | {stage:'input',r,c,ch}
 function footprint(){
-  const R={}; if(!probe) return R; let st,rect,chs;
+  const R={}; if(!probe) return R;
   // head: show only the direct link (averages read pool 2; classes read the averages). Everything upstream of that is the whole image.
   if(probe.stage==='gap'){ R.pool2={rect:[0,S.Q2-1,0,S.Q2-1],chs:new Set([probe.ch])}; R.gap={rect:[0,0,0,0],chs:new Set([probe.ch])}; return R; }
   if(probe.stage==='scores'){ R.gap={rect:[0,0,0,0],chs:null}; return R; }
-  else if(probe.stage==='input'){ return R; }
-  else { st=probe.stage; rect=[probe.r,probe.r,probe.c,probe.c]; chs=new Set([probe.ch]); }
-  R[st]={rect,chs};
-  const order=['pool2','conv2','pool1','conv1'];
-  for(let i=order.indexOf(st);i<order.length;i++){ const s=order[i]; let r=R[s].rect;
-    if(s==='pool2'){ R.conv2={rect:[2*r[0],Math.min(2*r[1]+1,S.Q-1),2*r[2],Math.min(2*r[3]+1,S.Q-1)],chs:R.pool2.chs}; }
-    else if(s==='conv2'){ R.pool1={rect:[clamp(r[0]-1,0,S.Q-1),clamp(r[1]+1,0,S.Q-1),clamp(r[2]-1,0,S.Q-1),clamp(r[3]+1,0,S.Q-1)],chs:null}; }
-    else if(s==='pool1'){ R.conv1={rect:[2*r[0],Math.min(2*r[1]+1,S.O-1),2*r[2],Math.min(2*r[3]+1,S.O-1)],chs:R.pool1.chs}; }
-    else if(s==='conv1'){ const e=dil*(K-1); R.input={rect:[clamp(r[0]*stride-pad,0,N-1),clamp(r[1]*stride+e-pad,0,N-1),clamp(r[2]*stride-pad,0,N-1),clamp(r[3]*stride+e-pad,0,N-1)],chs:null}; } }
-  return R;
+  if(probe.stage==='input') return R;
+  return footprintCore(probe,S);
 }
 function updateHighlights(){
   hlGroup.clear(); const R=footprint(); const ro=$('readout');
@@ -372,15 +346,7 @@ const cIn=$('cIn'); const ctx=cIn.getContext('2d');
 function drawIn(){ const cell=cIn.width/N; for(let r=0;r<N;r++)for(let c=0;c<N;c++){ const v=input[r*N+c]; const g=isDark()?40+v*200:245-v*225; ctx.fillStyle=`rgb(${g|0},${g|0},${g|0})`; ctx.fillRect(c*cell,r*cell,cell,cell); }
   ctx.strokeStyle=cssVar('--line'); ctx.lineWidth=1; for(let k=0;k<=N;k++){ ctx.beginPath();ctx.moveTo(k*cell+.5,0);ctx.lineTo(k*cell+.5,cIn.height);ctx.stroke(); ctx.beginPath();ctx.moveTo(0,k*cell+.5);ctx.lineTo(cIn.width,k*cell+.5);ctx.stroke(); } }
 function set(r,c,v){ if(r>=0&&c>=0&&r<N&&c<N) input[r*N+c]=v; }
-const inPresets={
-  'Clear':()=>input.fill(0),
-  '7':()=>{ input.fill(0); for(let c=3;c<13;c++) set(3,c,1); for(let r=4;r<14;r++){ const c=12-Math.round((r-4)*0.7); set(r,c,1); set(r,c-1,.6);} },
-  '0':()=>{ input.fill(0); for(let r=0;r<N;r++)for(let c=0;c<N;c++){ const d=Math.hypot((r-7.5)/5,(c-7.5)/3.6); const v=1-Math.abs(d-1)*3; if(v>0) set(r,c,Math.min(1,v)); } },
-  'Cross':()=>{ input.fill(0); for(let r=0;r<N;r++){ set(r,7,1); set(r,8,1); set(7,r,1); set(8,r,1);} },
-  'Diagonal':()=>{ input.fill(0); for(let r=0;r<N;r++){ set(r,r,1); if(r<N-1) set(r,r+1,.5);} },
-  'Square':()=>{ input.fill(0); for(let r=4;r<12;r++)for(let c=4;c<12;c++) set(r,c,1); },
-  'Noise':()=>{ for(let q=0;q<N*N;q++) input[q]=Math.random(); },
-};
+const inPresets=Object.fromEntries(Object.entries(inputPresets(N)).map(([name,make])=>[name,()=>input.set(make())])); // presets live in ../core/cnn.js
 Object.entries(inPresets).forEach(([name,fn])=>{ const b=document.createElement('button'); b.textContent=name; b.onclick=()=>{ fn(); recompute(); }; $('inPresets').append(b); });
 let painting=false, erase=false;
 function paintAt(ev){ const rect=cIn.getBoundingClientRect(); const cell=rect.width/N; const c=Math.floor((ev.clientX-rect.left)/cell), r=Math.floor((ev.clientY-rect.top)/cell); if(r<0||c<0||r>=N||c>=N) return;
@@ -403,7 +369,6 @@ $('fcRand').onclick=()=>{ rerollFC(); recompute(); };
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>recompute());
 
 inPresets['7'](); rerollL2(); rerollFC(); setSweep('off'); resize(); recompute(true); applyCam(); loop();
-})();
 </script>
 </body>
 </html>

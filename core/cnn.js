@@ -1,6 +1,6 @@
 // Shared model core for the explorers. Pure functions, no DOM, no three.js.
-// Both pages currently carry their own inline copy of this logic; wiring them
-// to this module is task 1 in HANDOFF.md.
+// Both pages import it (cnn-2d/index.html, cnn-3d/index.html) and keep only display
+// code plus thin wrappers: the padded input drawn on the 2D page, and the head probes.
 
 export const K = 3;
 
@@ -50,15 +50,17 @@ export function softmax(logits) {
  * Full forward pass of the toy network:
  *   input N×N×1 → conv1 (C1 kernels, stride/pad/dil) + ReLU → pool → conv2 (C2 kernels 3×3×C1, s1 p1) + ReLU → pool
  *   → global average → FC (C2×NC + NC) → softmax
- * params: { input, N, bank (C1 kernels of 9), l2 (C2 × C1 × 9), W (C2 × NC), B (NC), stride, pad, dil, poolMode }
+ * params: { input, N, bank (C1 kernels of 9), l2 (C2 × C1 × 9), W (C2 × NC), B (NC), stride, pad, dil, poolMode,
+ *           activation: 'relu' (default) | 'none' (conv outputs pass through unchanged; the 2D page's ReLU toggle) }
  * Returns every intermediate tensor; channel maps are arrays of Float32Array.
  */
-export function forward({ input, N, bank, l2, W, B, stride = 1, pad = 1, dil = 1, poolMode = 'max' }) {
+export function forward({ input, N, bank, l2, W, B, stride = 1, pad = 1, dil = 1, poolMode = 'max', activation = 'relu' }) {
   const S = { N, stride, pad, dil };
   const opts = { stride, pad, dil };
+  const act = activation === 'none' ? (m) => m : relu;
   S.c1 = bank.map((k) => conv2d(input, N, k, opts).out);
   S.O = outSize(N, opts);
-  S.a1 = S.c1.map(relu);
+  S.a1 = S.c1.map(act);
   S.p1 = S.a1.map((m) => pool2(m, S.O, poolMode).out);
   S.Q = pool2(S.a1[0], S.O, poolMode).Q;
   // layer 2: one slice per input channel; partial sums kept for display
@@ -68,7 +70,7 @@ export function forward({ input, N, bank, l2, W, B, stride = 1, pad = 1, dil = 1
     ps.forEach((p) => { for (let q = 0; q < acc.length; q++) acc[q] += p[q]; });
     return acc;
   });
-  S.a2 = S.c2.map(relu);
+  S.a2 = S.c2.map(act);
   S.p2 = S.a2.map((m) => pool2(m, S.Q, poolMode).out);
   S.Q2 = pool2(S.a2[0], S.Q, poolMode).Q;
   S.gap = S.p2.map((m) => m.reduce((a, b) => a + b, 0) / m.length);
@@ -79,7 +81,8 @@ export function forward({ input, N, bank, l2, W, B, stride = 1, pad = 1, dil = 1
 }
 
 /**
- * Receptive-field propagation. probe = { stage: 'conv1'|'pool1'|'conv2'|'pool2', r, c, ch }.
+ * Receptive-field propagation. probe.stage is 'conv1'|'pool1'|'conv2'|'pool2'; the probed region is one cell
+ * { r, c, ch }, or a rect { rect:[r0,r1,c0,c1], ch } / { rect, chs: Set|null } (chs null = every channel).
  * Returns { stage: { rect:[r0,r1,c0,c1], chs: Set|null } } for every stage back to 'input'
  * (chs null = all channels; 'padIn' is the rect in padded-input coordinates, unclamped).
  */
@@ -88,7 +91,9 @@ export function footprint(probe, S) {
   const { N, stride, pad, dil } = S;
   const R = {};
   if (!probe) return R;
-  R[probe.stage] = { rect: [probe.r, probe.r, probe.c, probe.c], chs: new Set([probe.ch]) };
+  const rect = probe.rect ? probe.rect.slice() : [probe.r, probe.r, probe.c, probe.c];
+  const chs = 'chs' in probe ? probe.chs : probe.ch == null ? null : new Set([probe.ch]);
+  R[probe.stage] = { rect, chs };
   const order = ['pool2', 'conv2', 'pool1', 'conv1'];
   for (let i = order.indexOf(probe.stage); i < order.length; i++) {
     const s = order[i]; const r = R[s].rect;

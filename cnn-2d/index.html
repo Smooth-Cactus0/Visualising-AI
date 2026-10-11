@@ -219,34 +219,19 @@ dfn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 </main>
 <div id="tip" role="tooltip"></div>
 
-<script>
-(() => {
-const N = 16, K = 3, C1 = 4, C2 = 8, NC = 10;
+<script type="module">
+import { K, outSize, forward as forwardCore, footprint as footprintCore, kernelPresets, defaultBank, inputPresets } from '../core/cnn.js';
+const N = 16, C1 = 4, C2 = 8, NC = 10;
 const $ = id => document.getElementById(id);
 
 // ---------- state ----------
 const input = new Float32Array(N*N);
-const bank = [
-  [-1,0,1,-2,0,2,-1,0,1],
-  [-1,-2,-1,0,0,0,1,2,1],
-  [0,1,0,1,-4,1,0,1,0],
-  [1,0,-1,0,0,0,-1,0,1].map(v=>v*1.5)
-];
+const bank = defaultBank.map(k=>k.slice()); // layer-1 kernels: hand-picked edge detectors, editable below
 let kSlot = 0;
 let stride=1, pad=1, dil=1, step=0, relu=true, poolMode='max', playing=null;
 let l2 = null;  // C2 kernels × C1 slices × 9
 let W = null, B = null; // FC
 let probe = null;       // {stage, rect:[r0,r1,c0,c1], chs:Set|null} | {kind:'gap',f} | {kind:'class',c}
-
-const kPresets = {
-  'Vertical edge (Sobel x)':[-1,0,1,-2,0,2,-1,0,1],
-  'Horizontal edge (Sobel y)':[-1,-2,-1,0,0,0,1,2,1],
-  'Laplacian':[0,1,0,1,-4,1,0,1,0],
-  'Diagonal':[2,0,-2,0,0,0,-2,0,2],
-  'Blur (box)':Array(9).fill(1/9),
-  'Sharpen':[0,-1,0,-1,5,-1,0,-1,0],
-  'Identity':[0,0,0,0,1,0,0,0,0],
-};
 
 // ---------- helpers ----------
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -261,7 +246,6 @@ function divColor(v, scale){
   return `rgb(${zero.map((z,i)=>Math.round(z+(c[i]-z)*a)).join(',')})`;
 }
 function grayColor(v){ const g = isDark() ? 40+v*200 : 245-v*225; return `rgb(${g|0},${g|0},${g|0})`; }
-function outSize(n){ return Math.floor((n + 2*pad - dil*(K-1) - 1)/stride) + 1; }
 const maxAbs=m=>Math.max(0.01,...Array.from(m,Math.abs));
 
 const layouts = new WeakMap(); // canvas -> {cell,ox,oy,w,h}
@@ -307,54 +291,22 @@ function hoverable(cv, stage, ch){ // register receptive-field probing
   cv.addEventListener('pointerleave',()=>{ if(probe){ probe=null; renderAll(); } });
 }
 
-// ---------- compute ----------
+// ---------- compute (the maths lives in ../core/cnn.js) ----------
 function padded(src,n){ const P=n+2*pad, out=new Float32Array(P*P);
   for(let r=0;r<n;r++)for(let c=0;c<n;c++) out[(r+pad)*P+c+pad]=src[r*n+c]; return out; }
-function conv(src,n,ker){ const P=n+2*pad, pin=padded(src,n), O=outSize(n), out=new Float32Array(O*O);
-  for(let i=0;i<O;i++)for(let j=0;j<O;j++){ let s=0;
-    for(let a=0;a<K;a++)for(let b=0;b<K;b++) s+=pin[(i*stride+a*dil)*P + j*stride+b*dil]*ker[a*K+b];
-    out[i*O+j]=s; } return {out,O,pin,P}; }
-function act(m){ return relu? m.map(v=>Math.max(0,v)) : m; }
-function pool(m,O){ const Q=Math.max(1,Math.floor(O/2)), out=new Float32Array(Q*Q);
-  for(let i=0;i<Q;i++)for(let j=0;j<Q;j++){ const g=(r,c)=> (r<O&&c<O)? m[r*O+c] : (poolMode==='max'?-Infinity:0);
-    const v=[g(2*i,2*j),g(2*i,2*j+1),g(2*i+1,2*j),g(2*i+1,2*j+1)].filter(x=>x!==-Infinity);
-    out[i*Q+j]= poolMode==='max'? Math.max(...v) : v.reduce((a,b)=>a+b)/v.length; } return {out,Q}; }
-function conv1ch(src,n,ker){ const out=new Float32Array(n*n);
-  for(let i=0;i<n;i++)for(let j=0;j<n;j++){ let s=0;
-    for(let a=0;a<K;a++)for(let b=0;b<K;b++){ const r=i+a-1,c=j+b-1; if(r<0||c<0||r>=n||c>=n) continue; s+=src[r*n+c]*ker[a*K+b]; }
-    out[i*n+j]=s; } return out; }
-
 function forward(){
-  const S={};
-  S.O=outSize(N); S.P=N+2*pad; S.pin=padded(input,N);
-  S.c1=bank.map(k=>conv(input,N,k).out); S.a1=S.c1.map(act); S.p1=S.a1.map(m=>pool(m,S.O).out); S.Q=pool(S.a1[0],S.O).Q;
-  S.parts=l2.map(ker=>ker.map((sl,f)=>conv1ch(S.p1[f],S.Q,sl)));
-  S.c2=S.parts.map(ps=>{ const acc=new Float32Array(S.Q*S.Q); ps.forEach(p=>{for(let q=0;q<acc.length;q++)acc[q]+=p[q];}); return acc; });
-  S.a2=S.c2.map(act); S.p2=S.a2.map(m=>pool(m,S.Q).out); S.Q2=pool(S.a2[0],S.Q).Q;
-  S.gap=S.p2.map(m=>m.reduce((a,b)=>a+b,0)/m.length);
-  S.logits=Array.from({length:NC},(_,c)=>S.gap.reduce((s,g,f)=>s+g*W[f][c],B[c]));
-  const mx=Math.max(...S.logits); const ex=S.logits.map(v=>Math.exp(v-mx)); const Z=ex.reduce((a,b)=>a+b); S.prob=ex.map(v=>v/Z);
+  const S=forwardCore({input,N,bank,l2,W,B,stride,pad,dil,poolMode,activation:relu?'relu':'none'});
+  S.P=N+2*pad; S.pin=padded(input,N); // the zero-padded input, drawn in stage 2
   return S;
 }
 
-// receptive-field propagation: returns rects per stage + which channel sets are lit
+// receptive-field propagation: rects per stage + which channel sets are lit (core footprint).
+// Head probes (a global-average entry, a class) start from the whole pool-2 block.
 function footprint(S){
-  const R={}; if(!probe) return R;
-  let st, rect, chs;
-  if(probe.kind==='gap'){ st='pool2'; rect=[0,S.Q2-1,0,S.Q2-1]; chs=new Set([probe.f]); }
-  else if(probe.kind==='class'){ st='pool2'; rect=[0,S.Q2-1,0,S.Q2-1]; chs=null; }
-  else { st=probe.stage; rect=probe.rect.slice(); chs = probe.ch==null? null : new Set([probe.ch]); }
-  R[st]={rect,chs};
-  const order=['pool2','conv2','pool1','conv1'];
-  for(let i=order.indexOf(st); i<order.length; i++){
-    const s=order[i]; let r=R[s].rect;
-    if(s==='pool2'){ r=[2*r[0],Math.min(2*r[1]+1,S.Q-1),2*r[2],Math.min(2*r[3]+1,S.Q-1)]; R.conv2={rect:r,chs:R.pool2.chs}; }
-    else if(s==='conv2'){ r=[clamp(r[0]-1,0,S.Q-1),clamp(r[1]+1,0,S.Q-1),clamp(r[2]-1,0,S.Q-1),clamp(r[3]+1,0,S.Q-1)]; R.pool1={rect:r,chs:null}; }
-    else if(s==='pool1'){ r=[2*r[0],Math.min(2*r[1]+1,S.O-1),2*r[2],Math.min(2*r[3]+1,S.O-1)]; R.conv1={rect:r,chs:R.pool1.chs}; }
-    else if(s==='conv1'){ const e=dil*(K-1); const pr=[r[0]*stride, r[1]*stride+e, r[2]*stride, r[3]*stride+e]; R.padIn={rect:pr};
-      R.input={rect:[clamp(pr[0]-pad,0,N-1),clamp(pr[1]-pad,0,N-1),clamp(pr[2]-pad,0,N-1),clamp(pr[3]-pad,0,N-1)]}; }
-  }
-  return R;
+  if(!probe) return {};
+  if(probe.kind==='gap') return footprintCore({stage:'pool2',rect:[0,S.Q2-1,0,S.Q2-1],chs:new Set([probe.f])},S);
+  if(probe.kind==='class') return footprintCore({stage:'pool2',rect:[0,S.Q2-1,0,S.Q2-1],chs:null},S);
+  return footprintCore(probe,S);
 }
 const lit=(R,st,ch)=> R[st] && (R[st].chs===null || R[st].chs.has(ch)) ? R[st].rect : null;
 
@@ -483,8 +435,8 @@ function syncKgrid(){ [...$('kgrid').children].forEach((inp,q)=>inp.value=fmt(ba
 for(let q=0;q<9;q++){ const inp=document.createElement('input'); inp.type='text'; inp.inputMode='decimal';
   inp.onchange=()=>{ const v=parseFloat(inp.value); bank[kSlot][q]=isNaN(v)?0:v; inp.value=fmt(bank[kSlot][q]); renderAll(); };
   $('kgrid').append(inp); }
-Object.keys(kPresets).forEach(k=>{ const o=document.createElement('option'); o.textContent=k; $('kPreset').append(o); });
-$('kPreset').onchange=e=>{ bank[kSlot]=kPresets[e.target.value].slice(); syncKgrid(); renderAll(); };
+Object.keys(kernelPresets).forEach(k=>{ const o=document.createElement('option'); o.textContent=k; $('kPreset').append(o); });
+$('kPreset').onchange=e=>{ bank[kSlot]=kernelPresets[e.target.value].slice(); syncKgrid(); renderAll(); };
 $('kRand').onclick=()=>{ bank[kSlot]=Array.from({length:9},()=>+(Math.random()*2-1).toFixed(2)); syncKgrid(); renderAll(); };
 const rnd=(n,s=1)=>Array.from({length:n},()=>+((Math.random()*2-1)*s).toFixed(2));
 function rerollL2(){ l2=Array.from({length:C2},()=>Array.from({length:C1},()=>rnd(9))); }
@@ -493,15 +445,7 @@ $('l2Rand').onclick=()=>{ rerollL2(); renderAll(); };
 $('fcRand').onclick=()=>{ rerollFC(); renderAll(); };
 
 // ---------- input UI ----------
-const inPresets={
-  'Clear':()=>input.fill(0),
-  '7':()=>{ input.fill(0); for(let c=3;c<13;c++) set(3,c,1); for(let r=4;r<14;r++){ const c=12-Math.round((r-4)*0.7); set(r,c,1); set(r,c-1,.6);} },
-  '0':()=>{ input.fill(0); for(let r=0;r<N;r++)for(let c=0;c<N;c++){ const d=Math.hypot((r-7.5)/5,(c-7.5)/3.6); const v=1-Math.abs(d-1)*3; if(v>0) set(r,c,Math.min(1,v)); } },
-  'Cross':()=>{ input.fill(0); for(let r=0;r<N;r++){ set(r,7,1); set(r,8,1); set(7,r,1); set(8,r,1);} },
-  'Diagonal':()=>{ input.fill(0); for(let r=0;r<N;r++){ set(r,r,1); if(r<N-1) set(r,r+1,.5);} },
-  'Square':()=>{ input.fill(0); for(let r=4;r<12;r++)for(let c=4;c<12;c++) set(r,c,1); },
-  'Noise':()=>{ for(let q=0;q<N*N;q++) input[q]=Math.random(); },
-};
+const inPresets=Object.fromEntries(Object.entries(inputPresets(N)).map(([name,make])=>[name,()=>input.set(make())])); // presets live in ../core/cnn.js
 function set(r,c,v){ if(r>=0&&c>=0&&r<N&&c<N) input[r*N+c]=v; }
 Object.entries(inPresets).forEach(([name,fn])=>{ const b=document.createElement('button'); b.textContent=name; b.onclick=()=>{ fn(); renderAll(); }; $('inPresets').append(b); });
 let painting=false, erase=false;
@@ -518,10 +462,10 @@ $('pad').onchange=e=>{ pad=+e.target.value; step=0; renderAll(); };
 $('dil').onchange=e=>{ dil=+e.target.value; step=0; renderAll(); };
 $('stepSlider').oninput=e=>{ step=+e.target.value; renderAll(); };
 $('prev').onclick=()=>{ step--; renderAll(); };
-$('next').onclick=()=>{ step=(step+1)%(outSize(N)**2); renderAll(); };
+$('next').onclick=()=>{ step=(step+1)%(outSize(N,{stride,pad,dil})**2); renderAll(); };
 function stopPlay(){ clearInterval(playing); playing=null; $('play').textContent='Play'; }
 $('play').onclick=()=>{ if(playing){ stopPlay(); return; } $('play').textContent='Pause';
-  playing=setInterval(()=>{ const t=outSize(N)**2; step=(step+1)%t; renderAll(); if(step===t-1) stopPlay(); }, +$('speed').value); };
+  playing=setInterval(()=>{ const t=outSize(N,{stride,pad,dil})**2; step=(step+1)%t; renderAll(); if(step===t-1) stopPlay(); }, +$('speed').value); };
 $('speed').onchange=()=>{ if(playing){ stopPlay(); $('play').click(); } };
 $('actRelu').onclick=()=>{ relu=true; $('actRelu').classList.add('sel'); $('actNone').classList.remove('sel'); renderAll(); };
 $('actNone').onclick=()=>{ relu=false; $('actNone').classList.add('sel'); $('actRelu').classList.remove('sel'); renderAll(); };
@@ -596,7 +540,6 @@ linkTerms(); renderLedger();
 
 // ---------- init ----------
 inPresets['7'](); rerollL2(); rerollFC(); syncKgrid(); renderAll();
-})();
 </script>
 </body>
 </html>
