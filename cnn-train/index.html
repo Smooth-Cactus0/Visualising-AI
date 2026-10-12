@@ -14,16 +14,16 @@
   --bg:#f7f8f6; --panel:#ffffff; --ink:#1d2430; --ink2:#5b6474; --line:#d9ddd6; --line2:#eef0ec;
   --accent:#2457a8; --accent-soft:#dde7f7;
   --pos:#e5641e; --neg:#2a6fd6; --zero:#f3f4f1;
-  --hl:#ffd94a; --hl2:#3fae4b;
+  --hl:#ffd94a; --hl2:#3fae4b; --scene:#eef0ea;
   --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
 }
 @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
   --bg:#171a1f; --panel:#1f232a; --ink:#e8eaee; --ink2:#9aa3b2; --line:#343a44; --line2:#272c35;
-  --accent:#7fa7ea; --accent-soft:#263650; --zero:#2a2f38; --hl:#d9b32d; --hl2:#5ad66a;
+  --accent:#7fa7ea; --accent-soft:#263650; --zero:#2a2f38; --hl:#d9b32d; --hl2:#5ad66a; --scene:#1b1f26;
 }}
 :root[data-theme="dark"]{
   --bg:#171a1f; --panel:#1f232a; --ink:#e8eaee; --ink2:#9aa3b2; --line:#343a44; --line2:#272c35;
-  --accent:#7fa7ea; --accent-soft:#263650; --zero:#2a2f38; --hl:#d9b32d; --hl2:#5ad66a;
+  --accent:#7fa7ea; --accent-soft:#263650; --zero:#2a2f38; --hl:#d9b32d; --hl2:#5ad66a; --scene:#1b1f26;
 }
 html{scroll-padding-top:env(safe-area-inset-top,0px);}
 *{box-sizing:inherit}
@@ -89,6 +89,17 @@ input[type=range]{accent-color:var(--accent)}
 .thumbs .ok{color:var(--hl2)} .thumbs .no{color:var(--pos)}
 .lrv{font-family:var(--mono);font-size:12.5px;min-width:4em}
 .counts{font-size:13px;color:var(--ink2);margin-left:auto;font-variant-numeric:tabular-nums}
+#view3d{position:relative;background:var(--scene);border:1px solid var(--line);border-radius:10px;height:560px;overflow:hidden;touch-action:none;margin-top:6px}
+#view3d canvas{display:block;width:100%!important;height:100%!important;border-radius:0}
+.lbl{position:absolute;transform:translate(-50%,-100%);font-size:12.5px;color:var(--ink2);text-align:center;pointer-events:none;white-space:nowrap;line-height:1.3}
+.lbl b{display:block;color:var(--ink);font-weight:600}
+.cams{position:absolute;top:10px;left:10px;display:flex;gap:6px;flex-wrap:wrap;z-index:1}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--panel)}
+.seg button{border:0;border-radius:0}
+.seg button+button{border-left:1px solid var(--line)}
+button.sel{background:var(--accent-soft);border-color:var(--accent)}
+.lat{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:12.5px;color:var(--ink2)}
+.lat input{flex:1}
 @media (prefers-reduced-motion: reduce){ *{transition:none!important} }
 </style>
 </head>
@@ -103,16 +114,23 @@ input[type=range]{accent-color:var(--accent)}
   <div class="head"><h2>One step</h2><span class="n">digit → forward → loss → backward → update</span>
     <p>Step runs one phase at a time; Next digit finishes this digit and brings the next one in. While Many steps plays, this band stays still; pause to see the current digit. Forward is what the other pages show. Backward is new: the gradient of the loss starts at the class scores as p − y and flows back through the same shapes, and each weight's gradient is what came forward times what came back at that weight. Update nudges every weight by learning rate × gradient, the other way. Hover any cell or weight for its arithmetic.</p></div>
   <div class="ctrls">
+    <span class="seg"><button id="rep2d" class="sel">2D</button><button id="rep3d">3D</button></span>
     <span class="phase" id="phase"><b data-p="0">digit</b>→<b data-p="1">forward</b>→<b data-p="2">backward</b>→<b data-p="3">update</b></span>
     <button id="stepBtn" class="primary">Step</button><button id="nextBtn">Next digit</button>
     <span class="cap" id="digitInfo"></span>
   </div>
+  <div id="band2d">
   <div class="cap" style="margin-top:12px">Forward: what came in</div>
   <div class="pipe" id="fwd"></div>
   <div class="cap">Backward: the error flowing back through the same shapes</div>
   <div class="pipe" id="bwd"></div>
   <div class="cap">Weights: w · ∂L/∂w · w′ = w − lr·∂L/∂w</div>
   <div class="trips" id="trips"></div>
+  </div>
+  <div id="band3d" hidden>
+    <div id="view3d"><div class="cams"><button data-cam="whole" class="sel">whole</button><button data-cam="forward">forward</button><button data-cam="backward">backward</button><button data-cam="weights">weights</button><button id="recenter3d" title="reset orientation and zoom">⟲ recentre</button></div></div>
+    <div class="lat"><span>start</span><input type="range" id="lateral3d" min="0" max="1000" value="500" title="scroll along the network"><span>end</span></div>
+  </div>
   <div class="math" id="readout"></div>
 </section>
 
@@ -146,12 +164,14 @@ input[type=range]{accent-color:var(--accent)}
 </main>
 <div id="tip" role="tooltip"></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script type="module">
 import { footprint } from '../core/cnn.js';
 import { parseMnist16, image } from '../core/data.js';
 import { initWeights, lossAndGrad, sgdStep, averageGrads, accuracy, shuffledOrder } from '../core/train.js';
 import { installTerms } from '../ui/terms.js';
 import { fmt, maxAbs, drawGrid, cellAt, cssVar } from '../ui/grid.js';
+import { createBlockView } from '../ui/blocks3d.js';
 import { saveTrained } from '../ui/trained.js';
 
 const N = 16, C1 = 4, C2 = 8, NC = 10;
@@ -234,7 +254,8 @@ function setPlaying(p) {
 }
 
 // ---------- update animation (weights fade from old to new over 300 ms) ----------
-function startAnim() { anim = { t0: performance.now(), t: 0 }; const tick = () => { if (!anim) return; const t = (performance.now() - anim.t0) / 300; if (t >= 1) { anim = null; renderTrips(); return; } anim.t = t; renderTrips(); requestAnimationFrame(tick); }; requestAnimationFrame(tick); }
+function paintWeights() { if (rep === '3d') view3d.refresh(); else renderTrips(); }
+function startAnim() { anim = { t0: performance.now(), t: 0 }; const tick = () => { if (!anim) return; const t = (performance.now() - anim.t0) / 300; if (t >= 1) { anim = null; paintWeights(); return; } anim.t = t; paintWeights(); requestAnimationFrame(tick); }; requestAnimationFrame(tick); }
 function shownWeights() { // the weights to draw: interpolated during the animation
   if (!anim || !prevWeights) return weights; const t = anim.t; const mix = (a, b) => a + t * (b - a);
   return { bank: weights.bank.map((k, i) => k.map((w, q) => mix(prevWeights.bank[i][q], w))), l2: weights.l2.map((ks, i) => ks.map((k, s) => k.map((w, q) => mix(prevWeights.l2[i][s][q], w)))), W: weights.W.map((r, f) => r.map((w, c) => mix(prevWeights.W[f][c], w))), B: weights.B.map((w, c) => mix(prevWeights.B[c], w)) };
@@ -346,6 +367,7 @@ function readout() {
       : cur.applied ? 'Updated: the weights moved. Step loads the next digit.' : `Gradient collected (batch ${collected.length}/${batch}); the weights move when the batch is complete. Step loads the next digit.`;
     return;
   }
+  if (p.kind === 'pixel') { ro.innerHTML = `<b>input</b> pixel (${p.r}, ${p.c}) = ${fmt(cur.input[p.r * N + p.c])}.`; return; }
   if (p.kind === 'map') { const name = p.stage.replace(/([0-9])/, ' $1'); const maps = { conv1: S.a1, pool1: S.p1, conv2: S.a2, pool2: S.p2 }[p.stage]; const n = p.stage === 'conv1' ? S.O : p.stage === 'pool2' ? S.Q2 : S.Q;
     const R = footprint({ stage: p.stage, rect: [p.r, p.r, p.c, p.c], ch: p.ch }, S); const [r0, r1, c0, c1] = R.input.rect;
     ro.innerHTML = `<b>${name} map ${p.ch + 1}</b> cell (${p.r}, ${p.c}) = ${fmt(maps[p.ch][p.r * n + p.c])}. Sees input rows ${r0}–${r1}, cols ${c0}–${c1}: a <b>${r1 - r0 + 1}×${c1 - c0 + 1}</b> patch.`; return; }
@@ -389,7 +411,123 @@ function renderPlay() {
   for (const r of recent) { const d = document.createElement('div'); const cv = canvas(32); drawGrid(cv, r.input, N, N, {}); const t = document.createElement('div'); const ok = r.pred === r.label; t.className = ok ? 'ok' : 'no'; t.textContent = `${r.label}${ok ? '✓' : '✗'}`; t.title = `label ${r.label}, guessed ${r.pred}`; d.append(cv, t); th.append(d); }
 }
 
-function renderAll() { renderPhase(); renderForward(); renderBackward(); renderTrips(); readout(); renderPlay(); }
+function renderAll() { renderPhase(); if (rep === '3d') render3d(); else { renderForward(); renderBackward(); renderTrips(); } readout(); renderPlay(); }
+
+// ---------- 3D representation (blocks of cubes; the renderer is shared in ../ui/blocks3d.js) ----------
+const VIEW_KEY = 'dl-explorer.train.view', GX = 7;
+let rep = '2d', view3d = null, built3d = '', curPreset = 'whole', fitted3d = false;
+function ensureView3d() {
+  if (view3d) return;
+  view3d = createBlockView($('view3d'), { explode: 0.7, layout: 'side', gapX: GX, rowGap: 22, lateral: $('lateral3d'), ease: reduced ? 1 : 0.12 });
+  view3d.onPick(onPick3d); view3d.start();
+}
+function setRep(r) {
+  rep = r; try { localStorage.setItem(VIEW_KEY, r); } catch { /* storage blocked: the choice just is not remembered */ }
+  $('rep2d').classList.toggle('sel', r === '2d'); $('rep3d').classList.toggle('sel', r === '3d');
+  $('band2d').hidden = r === '3d'; $('band3d').hidden = r === '2d';
+  if (r === '3d') { ensureView3d(); view3d.resize(); built3d = ''; }
+  probe = null; renderAll();
+  if (r === '3d') camPreset3d(curPreset);
+}
+const flatW = (M) => { const o = new Float32Array(C2 * NC); for (let f = 0; f < C2; f++) for (let c = 0; c < NC; c++) o[f * NC + c] = M[f][c]; return o; };
+function defs3d() { // the blocks for the current phase: forward row, gradient row beneath it, then w · ∂L/∂w · w′ rows
+  const S = cur.S, ph = cur.phase, g = gradShown(), w = shownWeights; // w() is read at draw time, so the update fade shows
+  const ab = (arrs) => Math.max(...arrs.map(maxAbs)); const shape = (rows, cols, chans) => `${rows}×${cols}×${chans}`; const D = [];
+  const fwd = [['in', 'digit', N, N, 1, 'gray', () => cur.input, 1]];
+  if (ph >= 1) fwd.push(['conv1', 'conv 1 + ReLU', S.O, S.O, C1, 'div', (ch) => S.a1[ch], ab(S.a1)], ['pool1', 'pool 1', S.Q, S.Q, C1, 'div', (ch) => S.p1[ch], ab(S.p1)],
+    ['conv2', 'conv 2 + ReLU', S.Q, S.Q, C2, 'div', (ch) => S.a2[ch], ab(S.a2)], ['pool2', 'pool 2', S.Q2, S.Q2, C2, 'div', (ch) => S.p2[ch], ab(S.p2)],
+    ['gap', 'global avg', 1, 1, C2, 'div', (ch) => [S.gap[ch]], maxAbs(S.gap)], ['scores', 'softmax', NC, 1, 1, 'div', () => S.prob, 1]);
+  let x = 0; const xs = {};
+  for (const [id, title, rows, cols, chans, mode, data, scale] of fwd) { xs[id] = x; D.push({ id, label: `${title}\n${id === 'scores' ? NC + ' classes' : id === 'gap' ? '1×1×' + C2 : shape(rows, cols, chans)}`, rows, cols, chans, mode, data, scale, row: 0, x0: x }); x += cols + GX; }
+  if (ph >= 2) { const B = cur.back;
+    for (const [id, title, rows, cols, chans, data, scale] of [['conv1', '∂L/∂conv 1', S.O, S.O, C1, (ch) => B.conv1[ch], ab(B.conv1)], ['pool1', '∂L/∂pool 1', S.Q, S.Q, C1, (ch) => B.pool1[ch], ab(B.pool1)],
+      ['conv2', '∂L/∂conv 2', S.Q, S.Q, C2, (ch) => B.conv2[ch], ab(B.conv2)], ['pool2', '∂L/∂pool 2', S.Q2, S.Q2, C2, (ch) => B.pool2[ch], ab(B.pool2)],
+      ['gap', '∂L/∂gap', 1, 1, C2, (ch) => [B.gap[ch]], maxAbs(B.gap)], ['scores', '∂L/∂scores = p − y', NC, 1, 1, () => B.scores, 1]])
+      D.push({ id: 'd_' + id, label: `${title}\n${shape(rows, cols, chans)}`, rows, cols, chans, mode: 'div', data, scale, row: 1, x0: xs[id] }); }
+  const sB = () => ab(w().bank), sL = () => Math.max(...w().l2.flat().map(maxAbs)), sW = () => maxAbs(flatW(w().W)), sb = () => maxAbs(w().B);
+  const gB = g ? ab(g.bank) : 1, gL = g ? Math.max(...g.l2.flat().map(maxAbs)) : 1, gW = g ? maxAbs(flatW(g.W)) : 1, gb = g ? maxAbs(g.B) : 1;
+  const nxt = (a, d) => a.map((v, q) => v - lr * d[q]);
+  const kinds = [['w', 2, 'w']]; if (g) kinds.push(['∂L/∂w', 3, 'g'], ['w′ = w − lr·∂L/∂w', 4, 'n']);
+  for (const [title, row, kind] of kinds) {
+    const ver = (getW, getG) => (kind === 'g' ? getG : kind === 'n' ? (ch) => nxt(getW(ch), getG(ch)) : getW);
+    const sc = (sw, sg) => (kind === 'g' ? sg : sw);
+    let x = 0;
+    D.push({ id: 'bank_' + kind, label: row === 2 ? 'layer-1 kernels\n3×3×4' : title + '\n ', rows: 3, cols: 3, chans: C1, mode: 'div', data: ver((ch) => w().bank[ch], (ch) => g.bank[ch]), scale: sc(sB, gB), row, x0: x }); x += 3 + GX;
+    for (let k = 0; k < C2; k++) { D.push({ id: `l2_${k}_${kind}`, label: row === 2 && k === 0 ? 'layer-2 kernels\n8 × 3×3×4' : null, rows: 3, cols: 3, chans: C1, mode: 'div', data: ver((ch) => w().l2[k][ch], (ch) => g.l2[k][ch]), scale: sc(sL, gL), row, x0: x }); x += 3 + GX; }
+    D.push({ id: 'W_' + kind, label: row === 2 ? 'FC weights\n8×10' : null, rows: C2, cols: NC, chans: 1, mode: 'div', data: ver(() => flatW(w().W), () => flatW(g.W)), scale: sc(sW, gW), row, x0: x }); x += NC + GX;
+    D.push({ id: 'B_' + kind, label: row === 2 ? 'FC biases\n1×10' : null, rows: 1, cols: NC, chans: 1, mode: 'div', data: ver(() => w().B, () => g.B), scale: sc(sb, gb), row, x0: x });
+  }
+  return D;
+}
+function render3d() {
+  const key = `${cur.i}:${cur.phase}:${collected.length}:${cur.applied}`;
+  if (key !== built3d) { built3d = key; view3d.setBlocks(defs3d()); if (!fitted3d) { fitted3d = true; camPreset3d('whole'); } }
+  else view3d.refresh();
+  highlights3d();
+}
+function fit(ids, theta, phi, pad) { // frame the given blocks: distance from their extent and the camera's fields of view
+  const bx = new THREE.Box3(); for (const id of ids) { const b = view3d.blockById(id); if (b) bx.union(view3d.bounds(b, 0, b.rows - 1, 0, b.cols - 1, 0, b.chans - 1)); }
+  if (bx.isEmpty()) return;
+  const size = bx.getSize(new THREE.Vector3()), centre = bx.getCenter(new THREE.Vector3());
+  const vf = (38 / 2) * Math.PI / 180, hf = Math.atan(Math.tan(vf) * view3d.camera.aspect);
+  const dist = Math.max(size.y / (2 * Math.tan(vf)), size.x / (2 * Math.tan(hf))) * pad + size.z;
+  view3d.setGoal({ theta, phi, dist, target: centre });
+}
+function camPreset3d(name) {
+  curPreset = name; const inRows = (rs) => view3d.blocks.filter((b) => rs.includes(b.row || 0)).map((b) => b.id);
+  if (name === 'whole') fit(inRows([0, 1, 2, 3, 4]), 0.4, 1.25, 1.15);
+  if (name === 'forward') fit(inRows([0]), 0.45, 1.15, 1.35);
+  if (name === 'backward') fit(inRows([0, 1]), 0.45, 1.2, 1.35);
+  if (name === 'weights') fit(inRows([2, 3, 4]), 0.3, 1.2, 1.5);
+  document.querySelectorAll('#view3d .cams button[data-cam]').forEach((x) => x.classList.toggle('sel', x.dataset.cam === name));
+}
+function onPick3d(hit) { // a picked cube becomes one of the probes the readout already understands
+  let np = null;
+  if (hit) { const { block: b, r, c, ch } = hit; const id = b.id;
+    if (id === 'in') np = { kind: 'pixel', r, c };
+    else if (id === 'gap' || id === 'd_gap') np = { kind: 'gap', f: ch };
+    else if (id === 'scores' || id === 'd_scores') np = { kind: 'bar', c: r };
+    else if (id.startsWith('d_')) np = { kind: 'back', stage: id.slice(2), r, c, ch };
+    else if (id.startsWith('bank_')) np = { kind: 'w', layer: 'bank', k: ch, q: r * 3 + c };
+    else if (id.startsWith('l2_')) np = { kind: 'w', layer: 'l2', k: +id.split('_')[1], s: ch, q: r * 3 + c };
+    else if (id.startsWith('W_')) np = { kind: 'w', layer: 'W', f: r, c };
+    else if (id.startsWith('B_')) np = { kind: 'w', layer: 'B', c };
+    else np = { kind: 'map', stage: id, r, c, ch }; }
+  if (JSON.stringify(np) !== JSON.stringify(probe)) { probe = np; readout(); highlights3d(); }
+}
+function highlights3d() {
+  const v = view3d; v.hl.clear(); const p = probe; if (!p || !cur.S) return;
+  const B = (id) => v.blockById(id), M = v.mats;
+  const box = (b, r0, r1, c0, c1, ch) => v.boxAt(b, r0, r1, c0, c1, ch, v.hl, M.hlFill, M.hlEdge);
+  const whole = (b, ch) => { box(b, 0, b.rows - 1, 0, b.cols - 1, ch); return v.bounds(b, 0, b.rows - 1, 0, b.cols - 1, ch, ch); };
+  const link = (a, b) => v.connect(a, b, M.rfLine, v.hl);
+  if (p.kind === 'pixel') { const b = B('in'); if (b) box(b, p.r, p.r, p.c, p.c, 0); return; }
+  if (p.kind === 'map') { // receptive field back through the forward row, as on the explorer
+    const R = footprint({ stage: p.stage, rect: [p.r, p.r, p.c, p.c], ch: p.ch }, cur.S); const chain = [];
+    for (const st of ['input', 'conv1', 'pool1', 'conv2', 'pool2']) { const h = R[st]; const b = B(st === 'input' ? 'in' : st); if (!h || !b) continue; const [r0, r1, c0, c1] = h.rect;
+      const lit = [...Array(b.chans).keys()].filter((ch) => h.chs === null || h.chs.has(ch)); lit.forEach((ch) => box(b, r0, r1, c0, c1, ch)); chain.push(v.bounds(b, r0, r1, c0, c1, Math.min(...lit), Math.max(...lit))); }
+    for (let i = 0; i + 1 < chain.length; i++) link(chain[i], chain[i + 1]); return; }
+  if (p.kind === 'back') { const b = B('d_' + p.stage); if (b) box(b, p.r, p.r, p.c, p.c, p.ch); return; }
+  if (p.kind === 'gap') { const pool2 = B('pool2'), gap = B('gap'), W = B('W_w'); let a = null, g2 = null;
+    if (pool2) a = whole(pool2, p.f); if (gap) g2 = whole(gap, p.f); if (W) box(W, p.f, p.f, 0, NC - 1, 0); if (a && g2) link(a, g2); return; }
+  if (p.kind === 'bar') { const gap = B('gap'), sc = B('scores'), W = B('W_w'); let a = null, s = null;
+    if (gap) { for (let f = 0; f < C2; f++) box(gap, 0, 0, 0, 0, f); a = v.bounds(gap, 0, 0, 0, 0, 0, C2 - 1); }
+    if (sc) { box(sc, p.c, p.c, 0, 0, 0); s = v.bounds(sc, p.c, p.c, 0, 0, 0, 0); }
+    if (W) box(W, 0, C2 - 1, p.c, p.c, 0); if (a && s) link(a, s); return; }
+  if (p.kind === 'w') { // the hovered weight in each of its rows, and the two blocks whose product it is
+    const isFC = p.layer === 'W' || p.layer === 'B'; const a = isFC ? (p.layer === 'W' ? p.f : 0) : Math.floor(p.q / 3), c = isFC ? p.c : p.q % 3, ch = p.layer === 'bank' ? p.k : p.layer === 'l2' ? p.s : 0;
+    const base = p.layer === 'l2' ? `l2_${p.k}` : p.layer; let target = null;
+    for (const kind of ['w', 'g', 'n']) { const b = B(`${base}_${kind}`); if (!b) continue; box(b, a, a, c, c, ch); if (!target) target = v.bounds(b, a, a, c, c, ch, ch); }
+    const srcs = [];
+    if (p.layer === 'bank') { if (B('d_conv1')) srcs.push(whole(B('d_conv1'), p.k)); if (B('in')) srcs.push(whole(B('in'), 0)); }
+    else if (p.layer === 'l2') { if (B('d_conv2')) srcs.push(whole(B('d_conv2'), p.k)); if (B('pool1')) srcs.push(whole(B('pool1'), p.s)); }
+    else { const gap = B('gap'), sc = B('scores'); if (p.layer === 'W' && gap) { box(gap, 0, 0, 0, 0, p.f); srcs.push(v.bounds(gap, 0, 0, 0, 0, p.f, p.f)); } if (sc) { box(sc, p.c, p.c, 0, 0, 0); srcs.push(v.bounds(sc, p.c, p.c, 0, 0, 0, 0)); } }
+    if (target) for (const s of srcs) link(s, target);
+  }
+}
+$('rep2d').onclick = () => setRep('2d'); $('rep3d').onclick = () => setRep('3d');
+$('recenter3d').onclick = () => camPreset3d(curPreset);
+document.querySelectorAll('#view3d .cams button[data-cam]').forEach((x) => { x.onclick = () => camPreset3d(x.dataset.cam); });
 
 // ---------- controls ----------
 const lrOf = (v) => 0.001 * Math.pow(500, v / 100);
@@ -417,6 +555,8 @@ $('dlBtn').onclick = () => { const blob = new Blob([JSON.stringify(bundle(), nul
   testIdx = Array.from({ length: data.test.n }, (_, i) => i);
   $('status').remove();
   reset();
+  let stored = '2d'; try { stored = localStorage.getItem(VIEW_KEY) || '2d'; } catch { /* storage blocked */ }
+  if (stored === '3d') setRep('3d');
 })();
 </script>
 </body>
