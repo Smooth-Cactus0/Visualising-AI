@@ -28,7 +28,7 @@
 html{scroll-padding-top:env(safe-area-inset-top,0px);}
 *{box-sizing:inherit}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:"Public Sans",system-ui,sans-serif;font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
-main{max-width:1180px;margin:0 auto;padding:28px 20px 80px}
+main{max-width:none;margin:0 auto;padding:28px 24px 80px}
 h1{font-size:28px;font-weight:600;letter-spacing:-.01em;margin:0 0 6px}
 h2{font-size:19px;font-weight:600;margin:0 0 4px}
 p{margin:0 0 10px;max-width:68ch}
@@ -39,7 +39,7 @@ p{margin:0 0 10px;max-width:68ch}
 section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin-bottom:22px}
 .head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:12px}
 .head .n{font-family:var(--mono);color:var(--ink2);font-size:13px}
-.head p{color:var(--ink2);margin:0;flex:1 1 100%;font-size:14px}
+.head p{color:var(--ink2);margin:0;flex:1 1 100%;font-size:14px;max-width:90ch}
 canvas{display:block;max-width:100%;touch-action:none;border-radius:4px}
 .cap{font-size:13px;color:var(--ink2);margin-top:6px;font-variant-numeric:tabular-nums}
 .cap b{color:var(--ink);font-weight:600}
@@ -53,12 +53,12 @@ input[type=range]{accent-color:var(--accent)}
 .math{font-family:var(--mono);font-size:12.5px;line-height:1.7;background:var(--line2);border-radius:6px;padding:10px 12px;overflow-x:auto;white-space:pre-wrap;min-height:3.2em;margin-top:10px}
 .math .sum{color:var(--accent);font-weight:600}
 .note{font-size:13.5px;color:var(--ink2);border-left:3px solid var(--accent-soft);padding:4px 12px;margin:0 0 22px;max-width:72ch}
-.pipe{display:flex;gap:16px;align-items:flex-start;overflow-x:auto;padding:6px 2px 12px}
+.pipe{display:flex;gap:12px 14px;align-items:flex-start;flex-wrap:wrap;padding:6px 2px 12px}
 .stage{flex:0 0 auto;text-align:center;font-size:12.5px;color:var(--ink2)}
 .stage .t{font-weight:500;color:var(--ink);margin-bottom:6px;white-space:nowrap}
 .stack{display:grid;gap:6px}
 .stack canvas{cursor:crosshair}
-.arrow{flex:0 0 auto;align-self:center;color:var(--ink2);font-size:20px;padding-top:18px}
+.arrow{flex:0 0 auto;align-self:center;color:var(--ink2);font-size:18px;padding-top:18px}
 .arrow.msg{font-size:13px;padding-top:0}
 .bars{display:grid;grid-template-columns:auto 1fr auto;gap:4px 8px;align-items:center;min-width:220px;text-align:left}
 .bars .lab{font-family:var(--mono);font-size:12.5px;color:var(--ink2)}
@@ -101,7 +101,7 @@ input[type=range]{accent-color:var(--accent)}
 
 <section id="s1">
   <div class="head"><h2>One step</h2><span class="n">digit → forward → loss → backward → update</span>
-    <p>Step runs one phase at a time; Next digit finishes this digit and brings the next one in. Forward is what the other pages show. Backward is new: the gradient of the loss starts at the class scores as p − y and flows back through the same shapes, and each weight's gradient is what came forward times what came back at that weight. Update nudges every weight by learning rate × gradient, the other way. Hover any cell or weight for its arithmetic.</p></div>
+    <p>Step runs one phase at a time; Next digit finishes this digit and brings the next one in. While Many steps plays, this band stays still; pause to see the current digit. Forward is what the other pages show. Backward is new: the gradient of the loss starts at the class scores as p − y and flows back through the same shapes, and each weight's gradient is what came forward times what came back at that weight. Update nudges every weight by learning rate × gradient, the other way. Hover any cell or weight for its arithmetic.</p></div>
   <div class="ctrls">
     <span class="phase" id="phase"><b data-p="0">digit</b>→<b data-p="1">forward</b>→<b data-p="2">backward</b>→<b data-p="3">update</b></span>
     <button id="stepBtn" class="primary">Step</button><button id="nextBtn">Next digit</button>
@@ -224,10 +224,14 @@ function frame(ts) {
   carry = Math.min(carry + speed * dt, Math.max(1, speed / 10));
   const t0 = performance.now();
   while (carry >= 1 && performance.now() - t0 < 12) { trainOne(); carry -= 1; }
-  if (ts - lastDraw > 100) { renderAll(); lastDraw = ts; }
+  if (ts - lastDraw > 100) { renderPlay(); lastDraw = ts; }
   requestAnimationFrame(frame);
 }
-function setPlaying(p) { playing = p; $('playBtn').textContent = p ? 'Pause' : 'Play'; if (p) { lastFrame = 0; carry = 0; anim = null; requestAnimationFrame(frame); } else renderAll(); }
+function setPlaying(p) {
+  playing = p; $('playBtn').textContent = p ? 'Pause' : 'Play';
+  if (p) { lastFrame = 0; carry = 0; anim = null; probe = null; $('readout').textContent = 'Playing. The step band stays on the last digit it showed; pause to see the current digit in full.'; requestAnimationFrame(frame); }
+  else renderAll();
+}
 
 // ---------- update animation (weights fade from old to new over 300 ms) ----------
 function startAnim() { anim = { t0: performance.now(), t: 0 }; const tick = () => { if (!anim) return; const t = (performance.now() - anim.t0) / 300; if (t >= 1) { anim = null; renderTrips(); return; } anim.t = t; renderTrips(); requestAnimationFrame(tick); }; requestAnimationFrame(tick); }

@@ -56,7 +56,7 @@ All functions are pure; weights and gradients use the same shapes as `core/cnn.j
 
 ## The page
 
-Theme, fonts, colour tokens, dotted terms and layout rules follow the 2D page. Canvases are sized in CSS as well as pixels. Reduced motion disables the update animation. All text that mentions a prediction says the weights are being trained on this page.
+Theme, fonts, colour tokens, dotted terms and layout rules follow the 2D page, except that the page uses the full window width and the forward and backward rows wrap rather than scroll (changed 2026-10-12 on Alexy's review). Canvases are sized in CSS as well as pixels. Reduced motion disables the update animation. All text that mentions a prediction says the weights are being trained on this page.
 
 ### Header
 
@@ -83,7 +83,7 @@ With batch size above 1, the band shows the last digit of the batch and the aver
 
 Controls: **Play / Pause**; speed 10, 50 or 200 digits per second; learning-rate slider (log scale 0.001 to 0.5, default 0.1, value shown; 0.05 learned too slowly in the measurements); batch 1, 8 or 32; **Reset** (new random weights; the seed starts at 1 and each Reset adds 1; counters and curves cleared; seed shown); **Start layer 1 from the edge detectors** (the same reset with the current seed, but layer 1 set to the hand-picked bank); counters: digits seen, passes completed (one pass = the 3,000 training digits in a seeded shuffled order; a new order each pass).
 
-Play runs Next-digit steps in a `requestAnimationFrame` loop within a time budget per frame, draws the step band at most ten times a second, and draws the curves at the same rate. With batch N, each update consumes N digits.
+Play runs Next-digit steps in a `requestAnimationFrame` loop within a time budget per frame and draws the play band at most ten times a second; the step band is left as it was until pause. With batch N, each update consumes N digits.
 
 Curves (canvas, theme-aware, axes with a few ticks): loss per digit as faint points with an exponential moving average line (α = 0.02); accuracy with two lines, running training accuracy over the last 200 digits and test accuracy on the 1,000 held-out digits measured every 200 digits and at reset (1,000 forward passes each time, which is why not every digit). Both plotted against digits seen; the x-axis grows.
 
