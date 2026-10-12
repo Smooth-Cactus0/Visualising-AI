@@ -19,7 +19,16 @@ export const TERMS = [
   ['score', /\bclass scores?\b/i, 'Score (logit)', 'The raw output of the FC layer for one class, before softmax. Can be any real number; higher means the network favours that class.'],
   ['softmax', /\bsoftmax\b/i, 'Softmax', 'Turns scores into probabilities: p_k = exp(s_k) / Σ exp(s_j). All outputs are positive and sum to 1; the largest score gets the largest share, and gaps between scores are exaggerated.'],
   ['rf', /\breceptive field\b/i, 'Receptive field', 'The patch of the input that can influence one value in a later map. Grows with every conv and every pool; the green boxes trace it.'],
-  ['training', /\btraining\b/i, 'Training', 'Showing the network many labelled images and nudging every weight so the correct class score rises. This page skips it; the weights are random or hand-picked, but the forward pass is identical.'],
+  ['training', /\btraining\b/i, 'Training', 'Showing the network many labelled images and nudging every weight so the correct class score rises. The training page does it live; the explorer pages skip it, so their weights are random or hand-picked unless trained ones are loaded, but the forward pass is identical.'],
+  ['loss', /\b(cross-entropy|loss)\b/i, 'Loss (cross-entropy)', 'One number for how wrong a prediction was: minus the log of the probability given to the true class. Zero when the network is certain and right, large when it is confident and wrong. Training pushes it down.'],
+  ['gradient', /\bgradients?\b/i, 'Gradient', 'For each weight, how much the loss would change per unit change of that weight, sign included: the direction that makes things worse. Written ∂L/∂w. Training moves every weight a little the other way.'],
+  ['backprop', /\bbackpropagation\b/i, 'Backpropagation', 'The bookkeeping that gives every weight its gradient. The error at the output is passed back through the layers one at a time; each layer turns the gradient at its output into the gradient at its input and at its own weights (the chain rule).'],
+  ['lr', /\blearning rate\b/i, 'Learning rate', 'The step size: each weight moves by learning rate × its gradient. Too small and training crawls; too large and it overshoots, so the loss jumps around instead of falling.'],
+  ['update', /\b(update step|SGD)\b/, 'Update (SGD step)', 'w ← w − learning rate × ∂L/∂w for every weight at once. Stochastic gradient descent: stochastic because each step uses one digit, or a small batch, rather than the whole dataset.'],
+  ['batch', /\bbatch\b/i, 'Batch', 'How many digits are seen before one update. Their gradients are averaged, so a bigger batch gives steadier but fewer steps.'],
+  ['pass', /\bpass(es)?\b/i, 'Pass (epoch)', 'One trip through the whole training set, in a shuffled order. Real training runs many.'],
+  ['heldout', /\bheld-out\b/i, 'Held-out test set', 'Digits the network never trains on, kept only to measure accuracy. Accuracy on the training digits can be flattered by memorising them; held-out accuracy cannot.'],
+  ['init', /\binitiali[sz]ation\b/i, 'Initialisation', 'The random starting values of the weights. Small random numbers, not zeros: identical weights would get identical gradients and never become different detectors.'],
 ];
 const termById = Object.fromEntries(TERMS.map((t) => [t[0], t]));
 

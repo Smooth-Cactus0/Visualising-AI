@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CNN explorer, training — how the weights learn</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<link rel="stylesheet" href="../ui/terms.css">
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  --bg:#f7f8f6; --panel:#ffffff; --ink:#1d2430; --ink2:#5b6474; --line:#d9ddd6; --line2:#eef0ec;
+  --accent:#2457a8; --accent-soft:#dde7f7;
+  --pos:#e5641e; --neg:#2a6fd6; --zero:#f3f4f1;
+  --hl:#ffd94a; --hl2:#3fae4b;
+  --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#171a1f; --panel:#1f232a; --ink:#e8eaee; --ink2:#9aa3b2; --line:#343a44; --line2:#272c35;
+  --accent:#7fa7ea; --accent-soft:#263650; --zero:#2a2f38; --hl:#d9b32d; --hl2:#5ad66a;
+}}
+:root[data-theme="dark"]{
+  --bg:#171a1f; --panel:#1f232a; --ink:#e8eaee; --ink2:#9aa3b2; --line:#343a44; --line2:#272c35;
+  --accent:#7fa7ea; --accent-soft:#263650; --zero:#2a2f38; --hl:#d9b32d; --hl2:#5ad66a;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px);}
+*{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Public Sans",system-ui,sans-serif;font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+main{max-width:1180px;margin:0 auto;padding:28px 20px 80px}
+h1{font-size:28px;font-weight:600;letter-spacing:-.01em;margin:0 0 6px}
+h2{font-size:19px;font-weight:600;margin:0 0 4px}
+p{margin:0 0 10px;max-width:68ch}
+.lede{color:var(--ink2);font-size:15.5px;margin-bottom:10px;max-width:78ch}
+.keys{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--ink2);margin-bottom:26px}
+.keys span{display:inline-flex;align-items:center;gap:6px}
+.keys i{display:inline-block;width:14px;height:14px;border-radius:3px;border:3px solid var(--hl2)}
+section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin-bottom:22px}
+.head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:12px}
+.head .n{font-family:var(--mono);color:var(--ink2);font-size:13px}
+.head p{color:var(--ink2);margin:0;flex:1 1 100%;font-size:14px}
+canvas{display:block;max-width:100%;touch-action:none;border-radius:4px}
+.cap{font-size:13px;color:var(--ink2);margin-top:6px;font-variant-numeric:tabular-nums}
+.cap b{color:var(--ink);font-weight:600}
+.ctrls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
+button,select{font:inherit;font-size:13.5px;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:5px 10px;cursor:pointer}
+button:hover,select:hover{border-color:var(--accent)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+label.ctl{display:inline-flex;align-items:center;gap:6px;font-size:13.5px;color:var(--ink2)}
+input[type=range]{accent-color:var(--accent)}
+.math{font-family:var(--mono);font-size:12.5px;line-height:1.7;background:var(--line2);border-radius:6px;padding:10px 12px;overflow-x:auto;white-space:pre-wrap;min-height:3.2em;margin-top:10px}
+.math .sum{color:var(--accent);font-weight:600}
+.note{font-size:13.5px;color:var(--ink2);border-left:3px solid var(--accent-soft);padding:4px 12px;margin:0 0 22px;max-width:72ch}
+.pipe{display:flex;gap:16px;align-items:flex-start;overflow-x:auto;padding:6px 2px 12px}
+.stage{flex:0 0 auto;text-align:center;font-size:12.5px;color:var(--ink2)}
+.stage .t{font-weight:500;color:var(--ink);margin-bottom:6px;white-space:nowrap}
+.stack{display:grid;gap:6px}
+.stack canvas{cursor:crosshair}
+.arrow{flex:0 0 auto;align-self:center;color:var(--ink2);font-size:20px;padding-top:18px}
+.arrow.msg{font-size:13px;padding-top:0}
+.bars{display:grid;grid-template-columns:auto 1fr auto;gap:4px 8px;align-items:center;min-width:220px;text-align:left}
+.bars .lab{font-family:var(--mono);font-size:12.5px;color:var(--ink2)}
+.bars .bar{height:14px;background:var(--line2);border-radius:3px;overflow:hidden;cursor:pointer}
+.bars .bar i{display:block;height:100%;background:var(--accent);opacity:.75}
+.bars .bar.top i{opacity:1}
+.bars .bar.true{outline:2px solid var(--ink);outline-offset:1px}
+.bars .bar.hov{outline:2px solid var(--hl2);outline-offset:1px}
+.bars .v{font-family:var(--mono);font-size:12px;color:var(--ink2);min-width:3.5em;text-align:right}
+.phase{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--ink2);margin-right:8px}
+.phase b{font-weight:500;padding:2px 9px;border-radius:12px;border:1px solid var(--line);color:var(--ink2)}
+.phase b.done{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
+.phase b.next{border-style:dashed;color:var(--ink)}
+.trips{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start;margin-top:6px}
+.trip{text-align:center;font-size:12px;color:var(--ink2)}
+.trip .t{font-weight:500;color:var(--ink);margin-bottom:4px;white-space:nowrap}
+.trip .g{display:inline-flex;gap:8px;align-items:flex-end}
+.trip .g span{display:block;font-size:11px;margin-top:2px;font-family:var(--mono)}
+.trip canvas{cursor:crosshair;margin:0 auto}
+.curves{display:flex;gap:18px;flex-wrap:wrap;margin-top:6px}
+.curves > div{flex:1 1 320px;min-width:0}
+.curves canvas{width:100%;height:170px;background:var(--bg);border:1px solid var(--line2)}
+.snaps{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start;margin-top:6px}
+.snaps > div{text-align:center;font-size:12px;color:var(--ink2)}
+.snaps canvas{margin:0 auto 4px}
+.thumbs{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.thumbs > div{text-align:center;font-size:11px;color:var(--ink2);width:34px;font-family:var(--mono)}
+.thumbs .ok{color:var(--hl2)} .thumbs .no{color:var(--pos)}
+.lrv{font-family:var(--mono);font-size:12.5px;min-width:4em}
+.counts{font-size:13px;color:var(--ink2);margin-left:auto;font-variant-numeric:tabular-nums}
+@media (prefers-reduced-motion: reduce){ *{transition:none!important} }
+</style>
+</head>
+<body>
+<main>
+<h1>CNN explorer, training</h1>
+<p class="lede">The same toy network as the other two pages, now learning. Real MNIST digits, shrunk to 16×16, come in one at a time: the network guesses, the loss says how wrong the guess was, the error flows back through the layers to give every weight a gradient, and every weight moves a little the other way. That is training; the rest is repetition. Step through one digit below, then play to watch the weights change over thousands. Being a toy of 12 kernels on 16×16 pixels, it reaches about 80 to 85% on digits it has never seen after a few passes, well short of a real LeNet's 99%, but every mechanism is the real one.</p>
+<div class="keys"><span><i></i> receptive field of a hovered cell, and the two sources of a hovered weight's gradient</span></div>
+<div class="note" id="status">Loading 4,000 digits (1 MB)…</div>
+
+<section id="s1">
+  <div class="head"><h2>One step</h2><span class="n">digit → forward → loss → backward → update</span>
+    <p>Step runs one phase at a time; Next digit finishes this digit and brings the next one in. Forward is what the other pages show. Backward is new: the gradient of the loss starts at the class scores as p − y and flows back through the same shapes, and each weight's gradient is what came forward times what came back at that weight. Update nudges every weight by learning rate × gradient, the other way. Hover any cell or weight for its arithmetic.</p></div>
+  <div class="ctrls">
+    <span class="phase" id="phase"><b data-p="0">digit</b>→<b data-p="1">forward</b>→<b data-p="2">backward</b>→<b data-p="3">update</b></span>
+    <button id="stepBtn" class="primary">Step</button><button id="nextBtn">Next digit</button>
+    <span class="cap" id="digitInfo"></span>
+  </div>
+  <div class="cap" style="margin-top:12px">Forward: what came in</div>
+  <div class="pipe" id="fwd"></div>
+  <div class="cap">Backward: the error flowing back through the same shapes</div>
+  <div class="pipe" id="bwd"></div>
+  <div class="cap">Weights: w · ∂L/∂w · w′ = w − lr·∂L/∂w</div>
+  <div class="trips" id="trips"></div>
+  <div class="math" id="readout"></div>
+</section>
+
+<section id="s2">
+  <div class="head"><h2>Many steps</h2><span class="n">play · curves · kernels over time · held-out accuracy</span>
+    <p>Play repeats the step for digit after digit. The loss curve shows the loss per digit, which is noisy, and its running average. Accuracy is measured two ways: on the last 200 training digits, and every 200 digits on 1,000 held-out test digits the network never trains on. The strip of kernels shows layer 1 at fixed milestones: with random initialisation it has to discover edges on its own; "start from edge detectors" begins from the hand-picked ones instead. Expect a plateau first: for several hundred digits the loss sits near 2.3, which is −log(1/10), a coin toss over ten classes, because eight averages of random kernels barely separate the digits. Then it drops. From the edge detectors it drops at once.</p></div>
+  <div class="ctrls">
+    <button id="playBtn" class="primary">Play</button>
+    <label class="ctl">speed <select id="speed"><option value="10">10 / s</option><option value="50">50 / s</option><option value="200" selected>200 / s</option></select></label>
+    <label class="ctl">learning rate <input type="range" id="lr" min="0" max="100" value="74" style="width:120px"><span class="lrv" id="lrv">0.1</span></label>
+    <label class="ctl">batch <select id="batch"><option>1</option><option>8</option><option>32</option></select></label>
+    <button id="resetBtn">Reset</button><button id="edgesBtn">Start layer 1 from edge detectors</button>
+    <span class="counts" id="counts"></span>
+  </div>
+  <div class="curves">
+    <div><canvas id="cLoss" width="560" height="170"></canvas><div class="cap">loss per digit (faint) and its running average</div></div>
+    <div><canvas id="cAcc" width="560" height="170"></canvas><div class="cap">accuracy: <b>training</b>, last 200 digits (thin) · <b>held-out</b>, 1,000 test digits every 200 (thick)</div></div>
+  </div>
+  <div class="cap" style="margin-top:12px">Layer-1 kernels over time</div>
+  <div class="snaps" id="snaps"></div>
+  <div class="cap" style="margin-top:12px">Recent digits, with the guess made at the time</div>
+  <div class="thumbs" id="thumbs"></div>
+  <div class="ctrls" id="handoff"></div>
+</section>
+
+<section id="s3">
+  <div class="head"><h2>Terms</h2><span class="n">dotted words above point here</span>
+    <p>Everything on this page is built from these. Hover or tap a dotted term anywhere above for the same definition in place.</p></div>
+  <div class="gloss" id="gloss"></div>
+</section>
+</main>
+<div id="tip" role="tooltip"></div>
+
+<script type="module">
+import { footprint } from '../core/cnn.js';
+import { parseMnist16, image } from '../core/data.js';
+import { initWeights, lossAndGrad, sgdStep, averageGrads, accuracy, shuffledOrder } from '../core/train.js';
+import { installTerms } from '../ui/terms.js';
+import { fmt, maxAbs, drawGrid, cellAt, cssVar } from '../ui/grid.js';
+
+const N = 16, C1 = 4, C2 = 8, NC = 10;
+const $ = (id) => document.getElementById(id);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const MILESTONES = [0, 100, 300, 1000, 3000, 10000];
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const argmax = (p) => p.reduce((b, v, i) => (v > p[b] ? i : b), 0);
+
+// ---------- state ----------
+let data = null, testIdx = [];
+let seed = 1, layer1 = 'random', lr = 0.1, batch = 1, speed = 200;
+let weights = null, order = [], orderPos = 0, passes = 0, digitsSeen = 0;
+let cur = null;          // { i, input, label, phase 0..3, S, loss, grads, back, pred, applied }
+let collected = [];      // gradients of the batch in progress
+let shown = null;        // the gradient drawn in the triplets: this digit's, or the batch average so far
+let prevWeights = null, anim = null;  // for the update animation
+let probe = null;        // hover state, see readout()
+let lossRaw = [], lossEma = [], ema = null, trainFlags = [], accTrain = [], accTest = [], lastTest = null, snaps = [], recent = [];
+let playing = false, carry = 0, lastFrame = 0, lastDraw = 0;
+
+// ---------- the training step, in phases ----------
+function loadDigit() {
+  if (orderPos >= order.length) { passes++; order = shuffledOrder(data.train.n, seed * 1000 + passes); orderPos = 0; }
+  const i = order[orderPos++];
+  cur = { i, input: image(data.train, i), label: data.train.labels[i], phase: 0 };
+}
+function doForward() {
+  const r = lossAndGrad(weights, cur.input, cur.label);
+  Object.assign(cur, { S: r.S, loss: r.loss, grads: r.grads, back: r.back, pred: argmax(r.S.prob), phase: 1 });
+}
+function doBackward() { collected.push(cur.grads); shown = collected.length === 1 ? cur.grads : averageGrads(collected); cur.phase = 2; }
+function doUpdate() {
+  if (collected.length >= batch) { prevWeights = weights; weights = sgdStep(weights, shown, lr); collected = []; cur.applied = true; }
+  else cur.applied = false;
+  cur.phase = 3; digitsSeen++; record(cur);
+}
+function record(d) {
+  lossRaw.push([digitsSeen, d.loss]); ema = ema == null ? d.loss : ema + 0.02 * (d.loss - ema); lossEma.push([digitsSeen, ema]);
+  if (lossRaw.length > 4000) { lossRaw = lossRaw.filter((_, i) => i % 2 === 0); lossEma = lossEma.filter((_, i) => i % 2 === 0); }
+  trainFlags.push(d.pred === d.label); if (trainFlags.length > 200) trainFlags.shift();
+  recent.push({ input: d.input, label: d.label, pred: d.pred }); if (recent.length > 20) recent.shift();
+  if (digitsSeen % 20 === 0) accTrain.push([digitsSeen, trainFlags.filter(Boolean).length / trainFlags.length]);
+  if (digitsSeen % 200 === 0) evalTest();
+  if (MILESTONES.includes(digitsSeen)) snaps.push({ at: digitsSeen, bank: weights.bank.map((k) => k.slice()) });
+}
+function evalTest() { lastTest = accuracy(weights, data.test, testIdx); accTest.push([digitsSeen, lastTest]); }
+function trainOne() { loadDigit(); doForward(); doBackward(); doUpdate(); }
+function step() {
+  if (cur.phase === 3) loadDigit(); else if (cur.phase === 0) doForward(); else if (cur.phase === 1) doBackward(); else { doUpdate(); if (cur.applied && !reduced) startAnim(); }
+  renderAll();
+}
+function nextDigit() {
+  if (cur.phase === 0) doForward(); if (cur.phase === 1) doBackward(); if (cur.phase === 2) doUpdate();
+  loadDigit(); doForward(); renderAll();
+}
+function reset({ newSeed = false, layer1: l1 = 'random' } = {}) {
+  if (newSeed) seed++; layer1 = l1;
+  weights = initWeights({ seed, layer1 }); order = shuffledOrder(data.train.n, seed * 1000); orderPos = 0; passes = 0; digitsSeen = 0;
+  collected = []; shown = null; prevWeights = null; anim = null; probe = null;
+  lossRaw = []; lossEma = []; ema = null; trainFlags = []; accTrain = []; accTest = []; recent = [];
+  snaps = [{ at: 0, bank: weights.bank.map((k) => k.slice()) }];
+  evalTest(); loadDigit(); renderAll();
+}
+
+// ---------- play loop ----------
+function frame(ts) {
+  if (!playing) return;
+  const dt = lastFrame ? Math.min(0.1, (ts - lastFrame) / 1000) : 0; lastFrame = ts;
+  carry = Math.min(carry + speed * dt, Math.max(1, speed / 10));
+  const t0 = performance.now();
+  while (carry >= 1 && performance.now() - t0 < 12) { trainOne(); carry -= 1; }
+  if (ts - lastDraw > 100) { renderAll(); lastDraw = ts; }
+  requestAnimationFrame(frame);
+}
+function setPlaying(p) { playing = p; $('playBtn').textContent = p ? 'Pause' : 'Play'; if (p) { lastFrame = 0; carry = 0; anim = null; requestAnimationFrame(frame); } else renderAll(); }
+
+// ---------- update animation (weights fade from old to new over 300 ms) ----------
+function startAnim() { anim = { t0: performance.now(), t: 0 }; const tick = () => { if (!anim) return; const t = (performance.now() - anim.t0) / 300; if (t >= 1) { anim = null; renderTrips(); return; } anim.t = t; renderTrips(); requestAnimationFrame(tick); }; requestAnimationFrame(tick); }
+function shownWeights() { // the weights to draw: interpolated during the animation
+  if (!anim || !prevWeights) return weights; const t = anim.t; const mix = (a, b) => a + t * (b - a);
+  return { bank: weights.bank.map((k, i) => k.map((w, q) => mix(prevWeights.bank[i][q], w))), l2: weights.l2.map((ks, i) => ks.map((k, s) => k.map((w, q) => mix(prevWeights.l2[i][s][q], w)))), W: weights.W.map((r, f) => r.map((w, c) => mix(prevWeights.W[f][c], w))), B: weights.B.map((w, c) => mix(prevWeights.B[c], w)) };
+}
+
+// ---------- rendering helpers ----------
+const lit = (R, st, ch) => (R[st] && (R[st].chs === null || R[st].chs.has(ch)) ? R[st].rect : null);
+function hoverable(cv, make) {
+  cv.addEventListener('pointermove', (ev) => { const p = cellAt(cv, ev); const np = p ? make(p) : null; if (JSON.stringify(np) !== JSON.stringify(probe)) { probe = np; renderAll(); } });
+  cv.addEventListener('pointerleave', () => { if (probe) { probe = null; renderAll(); } });
+}
+function stage(title, sub, cols) { const d = document.createElement('div'); d.className = 'stage'; const t = document.createElement('div'); t.className = 't'; t.textContent = title; d.append(t); const s = document.createElement('div'); s.className = 'stack'; if (cols) s.style.gridTemplateColumns = `repeat(${cols},auto)`; d.append(s); if (sub) { const c = document.createElement('div'); c.textContent = sub; c.style.marginTop = '6px'; d.append(c); } return [d, s]; }
+function arrow(txt = '→', msg = false) { const a = document.createElement('div'); a.className = 'arrow' + (msg ? ' msg' : ''); a.textContent = txt; return a; }
+function canvas(w, h = w) { const cv = document.createElement('canvas'); cv.width = w; cv.height = h; cv.style.width = w + 'px'; cv.style.height = h + 'px'; return cv; }
+const isW = (layer) => probe && probe.kind === 'w' && probe.layer === layer;
+const gradShown = () => (cur.phase === 2 ? shown : null);
+
+function renderPhase() {
+  $('phase').querySelectorAll('b').forEach((b) => { const p = +b.dataset.p; b.classList.toggle('done', p <= cur.phase); b.classList.toggle('next', p === cur.phase + 1); });
+  $('digitInfo').textContent = `training digit ${cur.i} · label ${cur.label}` + (cur.phase >= 1 ? ` · guess ${cur.pred} ${cur.pred === cur.label ? '✓' : '✗'}` : '') + (batch > 1 ? ` · batch ${collected.length}/${batch} collected` : '');
+  $('stepBtn').textContent = cur.phase === 3 ? 'Step: load the next digit' : cur.phase === 0 ? 'Step: forward' : cur.phase === 1 ? 'Step: backward' : 'Step: update';
+}
+
+function renderForward() {
+  const pipe = $('fwd'); pipe.innerHTML = '';
+  const R = probe && probe.kind === 'map' && cur.S ? footprint({ stage: probe.stage, rect: [probe.r, probe.r, probe.c, probe.c], ch: probe.ch }, cur.S) : {};
+  { const [d, s] = stage('digit', `label ${cur.label}`); const cv = canvas(96); drawGrid(cv, cur.input, N, N, { rect: R.input && R.input.rect, outline: isW('bank') }); s.append(cv); pipe.append(d); }
+  if (cur.phase < 1) { pipe.append(arrow('→  Step runs the forward pass', true)); return; }
+  const S = cur.S; pipe.append(arrow());
+  const mapsCol = (title, maps, n, st, sub, cols, px, srcOf) => { const [d, s] = stage(title, sub, cols); const sc = Math.max(...maps.map(maxAbs));
+    maps.forEach((m, idx) => { const cv = canvas(px); drawGrid(cv, m, n, n, { mode: 'div', scale: sc, rect: lit(R, st, idx), outline: !!(srcOf && srcOf(idx)) }); hoverable(cv, ([r, c]) => ({ kind: 'map', stage: st, r, c, ch: idx })); s.append(cv); }); return d; };
+  pipe.append(mapsCol('conv 1 + ReLU', S.a1, S.O, 'conv1', `4 maps ${S.O}×${S.O}`, 2, 56), arrow());
+  pipe.append(mapsCol('pool 1', S.p1, S.Q, 'pool1', `4 maps ${S.Q}×${S.Q}`, 2, 40, (i) => isW('l2') && probe.s === i), arrow());
+  pipe.append(mapsCol('conv 2 + ReLU', S.a2, S.Q, 'conv2', `8 maps ${S.Q}×${S.Q}`, 4, 40), arrow());
+  pipe.append(mapsCol('pool 2', S.p2, S.Q2, 'pool2', `8 maps ${S.Q2}×${S.Q2}`, 4, 32, (i) => probe && probe.kind === 'gap' && probe.f === i), arrow());
+  { const [d, s] = stage('global average', 'vector of 8'); const cv = canvas(36, 8 * 36);
+    const f = probe && (probe.kind === 'gap' || isW('W')) ? probe.f : null;
+    drawGrid(cv, S.gap, 1, C2, { mode: 'div', scale: maxAbs(S.gap), labels: true, rect: f != null ? [f, f, 0, 0] : probe && (probe.kind === 'bar' || isW('B')) ? [0, C2 - 1, 0, 0] : null });
+    hoverable(cv, ([r]) => ({ kind: 'gap', f: r })); s.append(cv); pipe.append(d, arrow()); }
+  { const [d, s] = stage('FC weights', '8 × 10, plus 10 biases'); const w = shownWeights(); const flat = new Float32Array(C2 * NC); for (let f = 0; f < C2; f++) for (let c = 0; c < NC; c++) flat[f * NC + c] = w.W[f][c];
+    const cv = canvas(NC * 20, C2 * 20);
+    const rect = isW('W') ? [probe.f, probe.f, probe.c, probe.c] : probe && (probe.kind === 'bar' || isW('B')) ? [0, C2 - 1, probe.c, probe.c] : probe && probe.kind === 'gap' ? [probe.f, probe.f, 0, NC - 1] : null;
+    drawGrid(cv, flat, NC, C2, { mode: 'div', scale: maxAbs(flat), rect }); hoverable(cv, ([f, c]) => ({ kind: 'w', layer: 'W', f, c })); s.append(cv); pipe.append(d, arrow()); }
+  { const [d, s] = stage('scores → softmax', `loss = −log p[${cur.label}] = ${fmt(cur.loss)}`); s.append(bars(S.prob, cur.label, cur.pred)); pipe.append(d); }
+}
+function bars(prob, label, top) {
+  const el = document.createElement('div'); el.className = 'bars';
+  for (let c = 0; c < NC; c++) {
+    const lab = document.createElement('div'); lab.className = 'lab'; lab.textContent = `class ${c}${c === label ? ' (true)' : ''}`;
+    const hov = probe && ((probe.kind === 'bar' && probe.c === c) || ((isW('W') || isW('B')) && probe.c === c));
+    const bar = document.createElement('div'); bar.className = 'bar' + (c === top ? ' top' : '') + (c === label ? ' true' : '') + (hov ? ' hov' : '');
+    const i = document.createElement('i'); i.style.width = (prob[c] * 100) + '%'; bar.append(i);
+    const v = document.createElement('div'); v.className = 'v'; v.textContent = (prob[c] * 100).toFixed(1) + '%';
+    [lab, bar, v].forEach((x) => x.addEventListener('pointerenter', () => { if (!(probe && probe.kind === 'bar' && probe.c === c)) { probe = { kind: 'bar', c }; renderAll(); } }));
+    el.append(lab, bar, v);
+  }
+  el.addEventListener('pointerleave', () => { probe = null; renderAll(); });
+  return el;
+}
+
+function renderBackward() {
+  const pipe = $('bwd'); pipe.innerHTML = '';
+  if (cur.phase < 2) { pipe.append(arrow(cur.phase < 1 ? 'after the forward pass' : '←  Step runs the backward pass', true)); return; }
+  const B = cur.back, S = cur.S; const isSrc = (layer, idx) => isW(layer) && probe.k === idx;
+  const mapsCol = (title, maps, n, st, sub, cols, px, srcOf) => { const [d, s] = stage(title, sub, cols); const sc = Math.max(...maps.map(maxAbs));
+    maps.forEach((m, idx) => { const cv = canvas(px); const own = probe && probe.kind === 'back' && probe.stage === st && probe.ch === idx;
+      drawGrid(cv, m, n, n, { mode: 'div', scale: sc, outline: !!(srcOf && srcOf(idx)), rect: own ? [probe.r, probe.r, probe.c, probe.c] : null }); hoverable(cv, ([r, c]) => ({ kind: 'back', stage: st, r, c, ch: idx })); s.append(cv); }); return d; };
+  pipe.append(mapsCol('∂L/∂conv 1', B.conv1, S.O, 'conv1', 'gated by ReLU', 2, 56, (i) => isSrc('bank', i)), arrow('←'));
+  pipe.append(mapsCol('∂L/∂pool 1', B.pool1, S.Q, 'pool1', 'summed over 8 kernels', 2, 40), arrow('←'));
+  pipe.append(mapsCol('∂L/∂conv 2', B.conv2, S.Q, 'conv2', 'gated by ReLU', 4, 40, (i) => isSrc('l2', i)), arrow('←'));
+  pipe.append(mapsCol('∂L/∂pool 2', B.pool2, S.Q2, 'pool2', 'through the max of each 2×2', 4, 32), arrow('←'));
+  { const [d, s] = stage('∂L/∂gap', 'a 16th to each cell'); const cv = canvas(36, 8 * 36); drawGrid(cv, B.gap, 1, C2, { mode: 'div', scale: maxAbs(B.gap), labels: true, rect: probe && probe.kind === 'gap' ? [probe.f, probe.f, 0, 0] : null }); hoverable(cv, ([r]) => ({ kind: 'gap', f: r })); s.append(cv); pipe.append(d, arrow('←')); }
+  { const [d, s] = stage('∂L/∂scores = p − y', 'where the backward pass starts'); const cv = canvas(NC * 30, 30);
+    const c = probe && (probe.kind === 'bar' || isW('W') || isW('B')) ? probe.c : null;
+    drawGrid(cv, B.scores, NC, 1, { mode: 'div', scale: 1, labels: true, rect: c != null ? [0, 0, c, c] : null }); hoverable(cv, ([, c]) => ({ kind: 'bar', c }));
+    const lab = document.createElement('div'); lab.className = 'cap'; lab.textContent = 'classes 0 to 9'; s.append(cv, lab); pipe.append(d); }
+}
+
+function renderTrips() {
+  const el = $('trips'); el.innerHTML = '';
+  const g = gradShown(), w = shownWeights();
+  const group = (title) => { const d = document.createElement('div'); d.className = 'trip'; const t = document.createElement('div'); t.className = 't'; t.textContent = title; d.append(t); const gr = document.createElement('div'); gr.className = 'g'; d.append(gr); el.append(d); return gr; };
+  const cell = (gr, label, data, cols, rows, scale, px, make, hl) => { const wrap = document.createElement('div'); const cv = canvas(cols * px, rows * px); drawGrid(cv, data, cols, rows, { mode: 'div', scale, labels: px >= 22, rect: hl }); hoverable(cv, make); const s = document.createElement('span'); s.textContent = label; wrap.append(cv, s); gr.append(wrap); };
+  const triplet = (gr, wData, gData, cols, rows, px, make, hl, sw, sg) => { cell(gr, 'w', wData, cols, rows, sw, px, make, hl); if (g) { cell(gr, '∂L/∂w', gData, cols, rows, sg, px, make, hl); cell(gr, 'w′', wData.map((v, q) => v - lr * gData[q]), cols, rows, sw, px, make, hl); } };
+  // layer 1: four 3×3 kernels
+  const sB = Math.max(...w.bank.map(maxAbs)), gB = g ? Math.max(...g.bank.map(maxAbs)) : 1;
+  w.bank.forEach((k, i) => { const hl = isW('bank') && probe.k === i ? [Math.floor(probe.q / 3), Math.floor(probe.q / 3), probe.q % 3, probe.q % 3] : null;
+    triplet(group(`layer 1, kernel ${i + 1}`), k, g && g.bank[i], 3, 3, 24, ([a, b]) => ({ kind: 'w', layer: 'bank', k: i, q: a * 3 + b }), hl, sB, gB); });
+  // layer 2: each kernel as its four 3×3 slices side by side (12 × 3 cells)
+  const flat2 = (ks) => { const out = new Float32Array(12 * 3); ks.forEach((k, s) => { for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) out[a * 12 + s * 3 + b] = k[a * 3 + b]; }); return out; };
+  const sL = Math.max(...w.l2.flat().map(maxAbs)), gL = g ? Math.max(...g.l2.flat().map(maxAbs)) : 1;
+  w.l2.forEach((ks, i) => { const hl = isW('l2') && probe.k === i ? [Math.floor(probe.q / 3), Math.floor(probe.q / 3), probe.s * 3 + probe.q % 3, probe.s * 3 + probe.q % 3] : null;
+    triplet(group(`layer 2, kernel ${i + 1} (4 slices)`), flat2(ks), g && flat2(g.l2[i]), 12, 3, 12, ([a, col]) => ({ kind: 'w', layer: 'l2', k: i, s: Math.floor(col / 3), q: a * 3 + col % 3 }), hl, sL, gL); });
+  // FC: W as 10 × 8, B as 10 × 1
+  const flatW = (M) => { const out = new Float32Array(C2 * NC); for (let f = 0; f < C2; f++) for (let c = 0; c < NC; c++) out[f * NC + c] = M[f][c]; return out; };
+  const sW = maxAbs(flatW(w.W)), gW = g ? maxAbs(flatW(g.W)) : 1;
+  triplet(group('FC weights W (rows: averages, cols: classes)'), flatW(w.W), g && flatW(g.W), NC, C2, 14, ([f, c]) => ({ kind: 'w', layer: 'W', f, c }), isW('W') ? [probe.f, probe.f, probe.c, probe.c] : null, sW, gW);
+  triplet(group('FC biases b'), Float32Array.from(w.B), g && Float32Array.from(g.B), NC, 1, 14, ([, c]) => ({ kind: 'w', layer: 'B', c }), isW('B') ? [0, 0, probe.c, probe.c] : null, maxAbs(w.B), g ? maxAbs(g.B) : 1);
+}
+
+function readout() {
+  const ro = $('readout'); const p = probe, S = cur.S, g = gradShown();
+  const upd = (wv, gv) => `w′ = w − lr·∂L/∂w = ${fmt(wv)} − ${fmt(lr)}×${fmt(gv)} = <span class="sum">${fmt(wv - lr * gv)}</span>`;
+  const avgNote = batch > 1 && collected.length > 1 ? ` (gradient averaged over ${collected.length} digits so far)` : '';
+  if (!p) {
+    ro.innerHTML = cur.phase === 0 ? 'A digit is loaded. Step runs the forward pass.'
+      : cur.phase === 1 ? `Forward done: the network says ${cur.pred}, the label is ${cur.label}. loss = −log p[${cur.label}] = −log ${fmt(S.prob[cur.label])} = <span class="sum">${fmt(cur.loss)}</span>. Step runs the backward pass.`
+      : cur.phase === 2 ? `Backward done: every weight has its gradient${avgNote}. Step applies w′ = w − ${fmt(lr)}·∂L/∂w to all ${4 * 9 + 8 * 4 * 9 + 8 * 10 + 10} weights at once.`
+      : cur.applied ? 'Updated: the weights moved. Step loads the next digit.' : `Gradient collected (batch ${collected.length}/${batch}); the weights move when the batch is complete. Step loads the next digit.`;
+    return;
+  }
+  if (p.kind === 'map') { const name = p.stage.replace(/([0-9])/, ' $1'); const maps = { conv1: S.a1, pool1: S.p1, conv2: S.a2, pool2: S.p2 }[p.stage]; const n = p.stage === 'conv1' ? S.O : p.stage === 'pool2' ? S.Q2 : S.Q;
+    const R = footprint({ stage: p.stage, rect: [p.r, p.r, p.c, p.c], ch: p.ch }, S); const [r0, r1, c0, c1] = R.input.rect;
+    ro.innerHTML = `<b>${name} map ${p.ch + 1}</b> cell (${p.r}, ${p.c}) = ${fmt(maps[p.ch][p.r * n + p.c])}. Sees input rows ${r0}–${r1}, cols ${c0}–${c1}: a <b>${r1 - r0 + 1}×${c1 - c0 + 1}</b> patch.`; return; }
+  if (p.kind === 'back') { const name = p.stage.replace(/([0-9])/, ' $1'); const n = p.stage === 'conv1' ? S.O : p.stage === 'pool2' ? S.Q2 : S.Q; const v = cur.back[p.stage][p.ch][p.r * n + p.c];
+    ro.innerHTML = `<b>∂L/∂${name} map ${p.ch + 1}</b> cell (${p.r}, ${p.c}) = ${fmt(v)}: how much the loss would change per unit change of that activation. ${v === 0 ? 'Zero: ReLU was off there, or max-pool did not pick it.' : ''}`; return; }
+  if (p.kind === 'gap') { ro.innerHTML = `<b>global average ${p.f + 1}</b> = mean of pool-2 map ${p.f + 1} = ${fmt(S.gap[p.f])}` + (cur.phase >= 2 ? `. ∂L/∂gap[${p.f + 1}] = Σ_c W[${p.f + 1},c]·(p[c] − y[c]) = <span class="sum">${fmt(cur.back.gap[p.f])}</span>, spread as a 16th to each cell of the map.` : '.'); return; }
+  if (p.kind === 'bar') { const y = p.c === cur.label ? 1 : 0; ro.innerHTML = `<b>class ${p.c}</b>${y ? ' (the true class)' : ''}: p = ${fmt(S.prob[p.c])}` + (cur.phase >= 2 ? `. ∂L/∂score[${p.c}] = p − y = ${fmt(S.prob[p.c])} − ${y} = <span class="sum">${fmt(S.prob[p.c] - y)}</span>` : '') + '.'; return; }
+  if (p.kind === 'w') {
+    const w = weights;
+    if (p.layer === 'W') { const wv = w.W[p.f][p.c]; const y = p.c === cur.label ? 1 : 0; ro.innerHTML = `<b>W[row ${p.f + 1}, class ${p.c}]</b> = ${fmt(wv)}: links global average ${p.f + 1} to class ${p.c}.` + (g ? ` ∂L/∂W = gap[${p.f + 1}] × (p[${p.c}] − y[${p.c}]) = ${fmt(S.gap[p.f])} × (${fmt(S.prob[p.c])} − ${y}) = <span class="sum">${fmt(g.W[p.f][p.c])}</span>${avgNote}. ${upd(wv, g.W[p.f][p.c])}` : ''); return; }
+    if (p.layer === 'B') { const wv = w.B[p.c]; const y = p.c === cur.label ? 1 : 0; ro.innerHTML = `<b>b[${p.c}]</b> = ${fmt(wv)}.` + (g ? ` ∂L/∂b[${p.c}] = p[${p.c}] − y[${p.c}] = ${fmt(S.prob[p.c])} − ${y} = <span class="sum">${fmt(g.B[p.c])}</span>${avgNote}. ${upd(wv, g.B[p.c])}` : ''); return; }
+    const a = Math.floor(p.q / 3), b = p.q % 3;
+    if (p.layer === 'bank') { const wv = w.bank[p.k][p.q]; ro.innerHTML = `<b>layer-1 kernel ${p.k + 1}</b>, cell (${a}, ${b}) = ${fmt(wv)}.` + (g ? ` ∂L/∂w = Σ over ${S.O * S.O} positions of ∂L/∂conv1_${p.k + 1}[i,j] × input[i+${a}−1, j+${b}−1] (the two outlined maps) = <span class="sum">${fmt(g.bank[p.k][p.q])}</span>${avgNote}. ${upd(wv, g.bank[p.k][p.q])}` : ''); return; }
+    const wv = w.l2[p.k][p.s][p.q]; ro.innerHTML = `<b>layer-2 kernel ${p.k + 1}, slice ${p.s + 1}</b>, cell (${a}, ${b}) = ${fmt(wv)}.` + (g ? ` ∂L/∂w = Σ over ${S.Q * S.Q} positions of ∂L/∂conv2_${p.k + 1}[i,j] × pool1_${p.s + 1}[i+${a}−1, j+${b}−1] (the two outlined maps) = <span class="sum">${fmt(g.l2[p.k][p.s][p.q])}</span>${avgNote}. ${upd(wv, g.l2[p.k][p.s][p.q])}` : '');
+  }
+}
+
+// ---------- play band ----------
+const niceStep = (xmax) => { const raw = Math.max(1, xmax / 5); const p = Math.pow(10, Math.floor(Math.log10(raw))); const m = raw / p; return (m < 2 ? 2 : m < 5 ? 5 : 10) * p; };
+function drawCurve(cv, series, { ymin, ymax, yTicks, yfmt, xmax }) {
+  const ctx = cv.getContext('2d'); const W = cv.width, H = cv.height; ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, W, H);
+  const L = 44, Rm = 8, T = 8, Bm = 22; const x = (v) => L + (v / Math.max(1, xmax)) * (W - L - Rm), y = (v) => T + (1 - (clamp(v, ymin, ymax) - ymin) / (ymax - ymin)) * (H - T - Bm);
+  ctx.font = `11px ${getComputedStyle(document.body).fontFamily}`; ctx.fillStyle = cssVar('--ink2');
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (const t of yTicks) { ctx.strokeStyle = cssVar('--line2'); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(L, y(t)); ctx.lineTo(W - Rm, y(t)); ctx.stroke(); ctx.fillText(yfmt(t), L - 5, y(t)); }
+  ctx.strokeStyle = cssVar('--line'); ctx.beginPath(); ctx.moveTo(L, T); ctx.lineTo(L, H - Bm); ctx.lineTo(W - Rm, H - Bm); ctx.stroke();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top'; const st = niceStep(xmax); for (let v = 0; v <= xmax; v += st) ctx.fillText(String(v), x(v), H - Bm + 4);
+  for (const s of series) { if (!s.pts.length) continue; ctx.globalAlpha = s.alpha ?? 1; ctx.strokeStyle = ctx.fillStyle = s.color; ctx.lineWidth = s.width ?? 1.5;
+    if (s.dots) for (const [px, py] of s.pts) ctx.fillRect(x(px) - 1, y(py) - 1, 2, 2);
+    else { ctx.beginPath(); s.pts.forEach(([px, py], i) => (i ? ctx.lineTo(x(px), y(py)) : ctx.moveTo(x(px), y(py)))); ctx.stroke(); }
+    ctx.globalAlpha = 1; }
+}
+function renderPlay() {
+  $('counts').textContent = `digits seen ${digitsSeen} · pass ${passes + 1} · seed ${seed} · held-out accuracy ${lastTest == null ? 'n/a' : (lastTest * 100).toFixed(1) + '%'}`;
+  const xmax = Math.max(200, digitsSeen); const accent = cssVar('--accent'), ink = cssVar('--ink');
+  drawCurve($('cLoss'), [{ pts: lossRaw, color: accent, dots: true, alpha: .35 }, { pts: lossEma, color: ink, width: 2 }], { ymin: 0, ymax: 4, yTicks: [0, 1, 2, 3, 4], yfmt: String, xmax });
+  drawCurve($('cAcc'), [{ pts: accTrain, color: accent, width: 1.2 }, { pts: accTest, color: ink, width: 2.5 }], { ymin: 0, ymax: 1, yTicks: [0, .5, 1], yfmt: (v) => (v * 100) + '%', xmax });
+  const sn = $('snaps'); sn.innerHTML = ''; const all = [...snaps, { at: 'now', bank: weights.bank }]; const sc = Math.max(...all.flatMap((s) => s.bank.map(maxAbs)));
+  for (const s of all) { const d = document.createElement('div'); d.textContent = s.at === 'now' ? 'now' : `${s.at} digits`; s.bank.forEach((k) => { const cv = canvas(30); drawGrid(cv, k, 3, 3, { mode: 'div', scale: sc }); d.prepend(cv); }); sn.append(d); }
+  const th = $('thumbs'); th.innerHTML = '';
+  for (const r of recent) { const d = document.createElement('div'); const cv = canvas(32); drawGrid(cv, r.input, N, N, {}); const t = document.createElement('div'); const ok = r.pred === r.label; t.className = ok ? 'ok' : 'no'; t.textContent = `${r.label}${ok ? '✓' : '✗'}`; t.title = `label ${r.label}, guessed ${r.pred}`; d.append(cv, t); th.append(d); }
+}
+
+function renderAll() { renderPhase(); renderForward(); renderBackward(); renderTrips(); readout(); renderPlay(); }
+
+// ---------- controls ----------
+const lrOf = (v) => 0.001 * Math.pow(500, v / 100);
+$('stepBtn').onclick = () => { if (playing) setPlaying(false); step(); };
+$('nextBtn').onclick = () => { if (playing) setPlaying(false); nextDigit(); };
+$('playBtn').onclick = () => setPlaying(!playing);
+$('speed').onchange = (e) => { speed = +e.target.value; };
+$('lr').oninput = (e) => { lr = +lrOf(+e.target.value).toPrecision(2); $('lrv').textContent = String(lr); if (!playing) renderAll(); };
+$('batch').onchange = (e) => { batch = +e.target.value; collected = []; shown = null; if (cur && cur.phase === 2) cur.phase = 1; renderAll(); };
+$('resetBtn').onclick = () => { setPlaying(false); reset({ newSeed: true }); };
+$('edgesBtn').onclick = () => { setPlaying(false); reset({ layer1: 'edges' }); };
+document.addEventListener('keydown', (e) => { if (!data || e.target.closest('input,select,button,textarea')) return; if (e.code === 'Space') { e.preventDefault(); $('stepBtn').click(); } else if (e.code === 'Enter') { e.preventDefault(); $('nextBtn').click(); } });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => data && renderAll());
+installTerms({ selectors: '.lede, .head p, .note', tip: $('tip'), gloss: $('gloss') });
+
+// ---------- init ----------
+(async () => {
+  try { const res = await fetch('../data/mnist16.bin'); if (!res.ok) throw new Error('HTTP ' + res.status); data = parseMnist16(await res.arrayBuffer()); }
+  catch (e) { $('status').textContent = `Could not load data/mnist16.bin (${e.message}). Serve the repo root over http; the file is 1 MB.`; return; }
+  testIdx = Array.from({ length: data.test.n }, (_, i) => i);
+  $('status').remove();
+  reset();
+})();
+</script>
+</body>
+</html>
