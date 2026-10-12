@@ -4,12 +4,12 @@ Purpose: interactive, visual explanations of how DL architectures compute (CNN f
 
 ## Layout
 - `core/` — pure JS model code and shared presets (ES modules, no DOM). Tests: `node core/cnn.test.mjs`.
-- `ui/` — shared DOM helpers: `terms.js` (the `TERMS` array, tooltip, glossary) and `terms.css`; `grid.js` (canvas grids, hit-testing, colours); `trained.js` (trained-weights hand-off through local storage). ES modules, imported by the pages.
+- `ui/` — shared DOM helpers: `terms.js` (the `TERMS` array, tooltip, glossary) and `terms.css`; `grid.js` (canvas grids, hit-testing, colours); `trained.js` (trained-weights hand-off through local storage); `blocks3d.js` (the 3D block renderer: scene, instanced cubes, highlights, labels, orbit camera, picking). ES modules, imported by the pages.
 - `data/` — the 16×16 MNIST subset (`mnist16.bin`, format and licence in its README); `tools/` — the standard-library Python script that makes it; `docs/superpowers/` — design specs and implementation plans.
 - `cnn-2d/`, `cnn-3d/`, `cnn-train/` — one self-contained page each. New pages follow the same pattern (`vit/`, `convnext/`, `coatnet/`).
 - `models/` — trained weights (JSON/ONNX) when added. Empty for now.
 - No build step. Plain HTML + ES modules served statically (GitHub Pages workflow in `.github/workflows/pages.yml`). Local dev: `python3 -m http.server 8000` from the repo root; modules need http, not file://.
-- External scripts only from cdnjs or jsDelivr, pinned to exact versions. three.js is r128 UMD from cdnjs; OrbitControls is not in that build, so the 3D page has its own small orbit implementation.
+- External scripts only from cdnjs or jsDelivr, pinned to exact versions. three.js is r128 UMD from cdnjs; OrbitControls is not in that build, so `ui/blocks3d.js` has its own small orbit implementation, used by the 3D explorer and the training page's 3D view.
 
 ## Design rules (keep these)
 - Visual and interactive over tables and text. The owner explicitly removed a table; don't reintroduce one.
