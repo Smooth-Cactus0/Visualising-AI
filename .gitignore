@@ -3,3 +3,6 @@ node_modules/
 
 # visual brainstorming companion sessions (local only)
 .superpowers/
+
+# MNIST downloads used by tools/make_mnist16.py
+tools/.cache/
