@@ -135,7 +135,7 @@ input[type=range]{accent-color:var(--accent)}
   <div class="snaps" id="snaps"></div>
   <div class="cap" style="margin-top:12px">Recent digits, with the guess made at the time</div>
   <div class="thumbs" id="thumbs"></div>
-  <div class="ctrls" id="handoff"></div>
+  <div class="ctrls" id="handoff"><button id="useBtn">Use these weights in the 2D / 3D explorers</button><button id="dlBtn">Download JSON</button><span class="cap" id="useMsg"></span></div>
 </section>
 
 <section id="s3">
@@ -152,6 +152,7 @@ import { parseMnist16, image } from '../core/data.js';
 import { initWeights, lossAndGrad, sgdStep, averageGrads, accuracy, shuffledOrder } from '../core/train.js';
 import { installTerms } from '../ui/terms.js';
 import { fmt, maxAbs, drawGrid, cellAt, cssVar } from '../ui/grid.js';
+import { saveTrained } from '../ui/trained.js';
 
 const N = 16, C1 = 4, C2 = 8, NC = 10;
 const $ = (id) => document.getElementById(id);
@@ -399,6 +400,11 @@ $('edgesBtn').onclick = () => { setPlaying(false); reset({ layer1: 'edges' }); }
 document.addEventListener('keydown', (e) => { if (!data || e.target.closest('input,select,button,textarea')) return; if (e.code === 'Space') { e.preventDefault(); $('stepBtn').click(); } else if (e.code === 'Enter') { e.preventDefault(); $('nextBtn').click(); } });
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => data && renderAll());
 installTerms({ selectors: '.lede, .head p, .note', tip: $('tip'), gloss: $('gloss') });
+
+// ---------- hand-off to the explorer pages ----------
+const bundle = () => ({ version: 1, N, bank: weights.bank, l2: weights.l2, W: weights.W, B: weights.B, meta: { digits: digitsSeen, passes, testAcc: lastTest, lr, date: new Date().toISOString() } });
+$('useBtn').onclick = () => { try { saveTrained(bundle()); $('useMsg').innerHTML = `Saved in this browser. Open the <a href="../cnn-2d/">2D</a> or <a href="../cnn-3d/">3D</a> explorer: it will use these weights until you choose "back to the hand-picked kernels" there.`; } catch (e) { $('useMsg').textContent = 'Could not save in this browser: ' + e.message; } };
+$('dlBtn').onclick = () => { const blob = new Blob([JSON.stringify(bundle(), null, 1)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'cnn16-trained.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); };
 
 // ---------- init ----------
 (async () => {

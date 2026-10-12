@@ -57,6 +57,8 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
 input[type=range]{width:100%;accent-color:var(--accent)}
 #cIn{border-radius:4px;touch-action:none;display:block}
 .hint{font-size:12.5px;color:var(--ink2)}
+.banner{font-size:13.5px;background:var(--accent-soft);border:1px solid var(--accent);border-radius:8px;padding:8px 12px;margin:0 0 14px;max-width:78ch}
+.banner a{color:var(--accent)}
 .keys{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--ink2);margin:8px 0 0}
 .keys span{display:inline-flex;align-items:center;gap:5px}
 .keys i{display:inline-block;width:12px;height:12px;border-radius:3px;border:3px solid var(--hl)}
@@ -99,7 +101,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
     <div class="hint" id="swHint">Layer 1: a 3×3×1 window slides over the input and writes one cube of one output channel. Layer 2: a 3×3×4 window slides over the whole pool-1 block, and its four channel partial sums add into one cube.</div>
     <h2>Weights</h2>
     <div class="ctrls"><button id="l2Rand">Reroll layer 2</button><button id="fcRand">Reroll FC</button></div>
-    <div class="hint">Layer-1 kernels are Sobel-x, Sobel-y, Laplacian, diagonal. Layer 2 and FC are random: the prediction is arbitrary, the mechanics are real.</div>
+    <div class="hint"><span id="wnote">Layer-1 kernels are Sobel-x, Sobel-y, Laplacian, diagonal. Layer 2 and FC are random: the prediction is arbitrary, the mechanics are real.</span></div>
     <div class="keys"><span><i></i> kernel window (forward)</span><span><i class="g"></i> receptive field (backward)</span></div>
   </div>
 </div>
@@ -115,6 +117,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 <script type="module">
 import { K, forward as forwardCore, footprint as footprintCore, defaultBank, inputPresets } from '../core/cnn.js';
 import { installTerms } from '../ui/terms.js';
+import { loadTrained, showTrainedBanner } from '../ui/trained.js';
 const N=16, C1=4, C2=8, NC=10;
 const $=id=>document.getElementById(id);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -386,7 +389,11 @@ $('fcRand').onclick=()=>{ rerollFC(); recompute(); };
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>recompute());
 
 installTerms({selectors:'.lede, .hint:not(#swHint)', tip:$('tip'), gloss:$('gloss')});
-inPresets['7'](); rerollL2(); rerollFC(); setSweep('off'); resize(); recompute(true); applyCam(); loop();
+const trained = loadTrained();
+if (trained) { trained.bank.forEach((k, i) => { bank[i] = k.slice(); }); l2 = trained.l2; W = trained.W; B = trained.B; showTrainedBanner(document.querySelector('h1'), trained);
+  $('wnote').textContent = `All weights were trained on the training page (${trained.meta.digits} digits): the prediction means something for digits, and the mechanics are the same either way.`; }
+else { rerollL2(); rerollFC(); }
+inPresets['7'](); setSweep('off'); resize(); recompute(true); applyCam(); loop();
 </script>
 </body>
 </html>

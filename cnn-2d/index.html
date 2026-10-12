@@ -68,6 +68,8 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .legend{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink2);margin-left:auto}
 .legend i{display:inline-block;width:34px;height:10px;border-radius:3px;background:linear-gradient(90deg,var(--neg),var(--zero),var(--pos))}
 .note{font-size:13.5px;color:var(--ink2);border-left:3px solid var(--accent-soft);padding:4px 12px;margin-top:10px;max-width:72ch}
+.banner{font-size:13.5px;background:var(--accent-soft);border:1px solid var(--accent);border-radius:8px;padding:8px 12px;margin:0 0 14px;max-width:78ch}
+.banner a{color:var(--accent)}
 .toggle{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
 .toggle button{border:0;border-radius:0}
 .toggle button+button{border-left:1px solid var(--line)}
@@ -197,7 +199,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 <!-- 5 PIPELINE TO PREDICTION -->
 <section id="s5">
   <div class="head"><h2>From feature maps to a prediction</h2><span class="n">pool 1 → conv 2 + ReLU → pool 2 → global average → FC → softmax</span>
-    <p>The whole network end to end. After the last pooling, each channel is averaged over space into one number (global average pooling), so the image becomes a vector of 8 "how much of pattern <i>j</i> is present, anywhere". A fully connected (FC) layer maps that vector to 10 class scores: each of the 8 values connects to each of the 10 classes through its own weight, so the FC layer is just an 8×10 grid of numbers plus 10 biases — learned parameters exactly like the kernels, and the only other kind the network has. Softmax turns scores into probabilities. Hover any map cell for its receptive field, a vector entry to see which map it summarises, an FC weight to see which average and class it connects, or a class bar to see how its score is built. Layer-2 and FC weights here are random, so the prediction is arbitrary — training is what moves these weights until the right bar wins. The mechanics are exactly what a trained network does.</p></div>
+    <p>The whole network end to end. After the last pooling, each channel is averaged over space into one number (global average pooling), so the image becomes a vector of 8 "how much of pattern <i>j</i> is present, anywhere". A fully connected (FC) layer maps that vector to 10 class scores: each of the 8 values connects to each of the 10 classes through its own weight, so the FC layer is just an 8×10 grid of numbers plus 10 biases — learned parameters exactly like the kernels, and the only other kind the network has. Softmax turns scores into probabilities. Hover any map cell for its receptive field, a vector entry to see which map it summarises, an FC weight to see which average and class it connects, or a class bar to see how its score is built. <span id="wnote">Layer-2 and FC weights here are random, so the prediction is arbitrary — training is what moves these weights until the right bar wins.</span> The mechanics are exactly what a trained network does.</p></div>
   <div class="ledger" id="ledger"></div>
   <div class="pipe" id="pipe"></div>
   <div class="rfout" id="rfout">Hover a cell anywhere in the page to trace its receptive field.</div>
@@ -217,6 +219,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 import { K, outSize, forward as forwardCore, footprint as footprintCore, kernelPresets, defaultBank, inputPresets } from '../core/cnn.js';
 import { installTerms } from '../ui/terms.js';
 import { fmt, isDark, cssVar, divColor, grayColor, maxAbs, drawGrid, cellAt } from '../ui/grid.js';
+import { loadTrained, showTrainedBanner } from '../ui/trained.js';
 const N = 16, C1 = 4, C2 = 8, NC = 10;
 const $ = id => document.getElementById(id);
 
@@ -443,7 +446,11 @@ function renderLedger(){
 installTerms({selectors:'.lede, .head p, .note', tip:$('tip'), gloss:$('gloss')}); renderLedger();
 
 // ---------- init ----------
-inPresets['7'](); rerollL2(); rerollFC(); syncKgrid(); renderAll();
+const trained = loadTrained();
+if (trained) { trained.bank.forEach((k, i) => { bank[i] = k.slice(); }); l2 = trained.l2; W = trained.W; B = trained.B; showTrainedBanner(document.querySelector('h1'), trained);
+  $('wnote').textContent = `Layer-2 and FC weights here were trained on the training page (${trained.meta.digits} digits), so the prediction means something for digits; the mechanics are the same either way.`; }
+else { rerollL2(); rerollFC(); }
+inPresets['7'](); syncKgrid(); renderAll();
 </script>
 </body>
 </html>
