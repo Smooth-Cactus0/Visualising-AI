@@ -74,3 +74,4 @@ Imported 2026-10-12 (commit 6a95715); both pages wired to `core/cnn.js` the same
 
 ## Open questions and known gaps
 - Intent does not say who the tool is for; the first court can capture it.
+- The toy network tops out around 80 to 85% on held-out digits. Closer to LeNet numbers would need a bigger network (more kernels or a hidden FC layer), which breaks the shared-network premise of the three pages; for Alexy to decide.
