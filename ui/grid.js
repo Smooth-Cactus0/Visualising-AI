@@ -1,0 +1,64 @@
+// ui/grid.js — canvas grid drawing and hit-testing shared by the 2D and training pages.
+// Colours come from the page's CSS tokens (--line, --ink, --hl, --hl2) and follow its light/dark theme.
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+/** Short number: '0', '1.5', '-0.33'. */
+export const fmt = (v) => { if (Math.abs(v) < 1e-9) return '0'; const s = v.toFixed(2); return s.replace(/\.?0+$/, ''); };
+export const isDark = () => document.documentElement.dataset.theme === 'dark' || (matchMedia('(prefers-color-scheme: dark)').matches && document.documentElement.dataset.theme !== 'light');
+export const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+/** Diverging colour for a signed value: blue negative, orange positive, the page's zero tone in between. */
+export function divColor(v, scale) {
+  const t = clamp(v / scale, -1, 1);
+  const neg = [42, 111, 214], pos = [229, 100, 30];
+  const zero = isDark() ? [42, 47, 56] : [243, 244, 241];
+  const c = t < 0 ? neg : pos, a = Math.abs(t);
+  return `rgb(${zero.map((z, i) => Math.round(z + (c[i] - z) * a)).join(',')})`;
+}
+/** Grey for a 0–1 value (ink on the page background). */
+export function grayColor(v) { const g = isDark() ? 40 + v * 200 : 245 - v * 225; return `rgb(${g | 0},${g | 0},${g | 0})`; }
+export const maxAbs = (m) => Math.max(0.01, ...Array.from(m, Math.abs));
+
+const layouts = new WeakMap(); // canvas -> {cell, ox, oy, w, h}
+
+/** Draw a w×h grid of values on a canvas, with optional labels and highlights; remembers the layout for cellAt. */
+export function drawGrid(cv, data, w, h, o = {}) {
+  const ctx = cv.getContext('2d'); const Wd = cv.width, Hd = cv.height;
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, Wd, Hd);
+  const cell = Math.floor(Math.min(Wd / w, Hd / h)); const ox = Math.floor((Wd - cell * w) / 2), oy = Math.floor((Hd - cell * h) / 2);
+  layouts.set(cv, { cell, ox, oy, w, h });
+  const scale = o.scale || 1;
+  for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) {
+    const v = data[r * w + c];
+    ctx.fillStyle = o.mode === 'div' ? divColor(v, scale) : grayColor(v);
+    ctx.fillRect(ox + c * cell, oy + r * cell, cell, cell);
+  }
+  ctx.strokeStyle = cssVar('--line'); ctx.lineWidth = 1;
+  for (let r = 0; r <= h; r++) { ctx.beginPath(); ctx.moveTo(ox, oy + r * cell + .5); ctx.lineTo(ox + w * cell, oy + r * cell + .5); ctx.stroke(); }
+  for (let c = 0; c <= w; c++) { ctx.beginPath(); ctx.moveTo(ox + c * cell + .5, oy); ctx.lineTo(ox + c * cell + .5, oy + h * cell); ctx.stroke(); }
+  if (o.padBorder) { const pad = o.pad || 0; ctx.strokeStyle = 'rgba(128,128,128,.9)'; ctx.setLineDash([3, 3]);
+    ctx.strokeRect(ox + pad * cell + .5, oy + pad * cell + .5, (w - 2 * pad) * cell, (h - 2 * pad) * cell); ctx.setLineDash([]); }
+  if (o.labels && cell >= 22) {
+    ctx.font = `${Math.max(9, cell * 0.36)}px ${getComputedStyle(document.body).fontFamily}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) {
+      const v = data[r * w + c]; const strong = o.mode === 'div' ? Math.abs(v / scale) > .55 : (isDark() ? v < .5 : v > .5);
+      ctx.fillStyle = strong ? '#fff' : cssVar('--ink');
+      if (o.mode !== 'div' && !strong && !isDark()) ctx.fillStyle = '#333';
+      ctx.fillText(fmt(v), ox + c * cell + cell / 2, oy + r * cell + cell / 2);
+    }
+  }
+  const hl = cssVar('--hl'), hl2 = cssVar('--hl2');
+  if (o.taps) { ctx.strokeStyle = hl; ctx.lineWidth = 3; o.taps.forEach(([r, c]) => ctx.strokeRect(ox + c * cell + 1.5, oy + r * cell + 1.5, cell - 3, cell - 3)); }
+  if (o.cell) { ctx.strokeStyle = hl; ctx.lineWidth = 3; ctx.strokeRect(ox + o.cell[1] * cell + 1.5, oy + o.cell[0] * cell + 1.5, cell - 3, cell - 3); }
+  if (o.rect) { const [r0, r1, c0, c1] = o.rect; ctx.strokeStyle = hl2; ctx.lineWidth = Math.max(2, Math.min(3, cell / 6));
+    const lw = ctx.lineWidth / 2; ctx.strokeRect(ox + c0 * cell + lw, oy + r0 * cell + lw, (c1 - c0 + 1) * cell - 2 * lw, (r1 - r0 + 1) * cell - 2 * lw);
+    ctx.fillStyle = hl2; ctx.globalAlpha = .18; ctx.fillRect(ox + c0 * cell, oy + r0 * cell, (c1 - c0 + 1) * cell, (r1 - r0 + 1) * cell); ctx.globalAlpha = 1; }
+  if (o.outline) { cv.style.outline = `3px solid ${hl2}`; cv.style.outlineOffset = '2px'; } else cv.style.outline = '';
+}
+
+/** Grid cell under a pointer event, as [row, col], or null outside the grid. */
+export function cellAt(cv, ev) {
+  const L = layouts.get(cv); if (!L) return null; const rect = cv.getBoundingClientRect(); const sx = rect.width / cv.width;
+  const c = Math.floor((ev.clientX - rect.left - L.ox * sx) / (L.cell * sx)), r = Math.floor((ev.clientY - rect.top - L.oy * sx) / (L.cell * sx));
+  return (r >= 0 && c >= 0 && r < L.h && c < L.w) ? [r, c] : null;
+}
