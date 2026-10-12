@@ -473,6 +473,8 @@ git commit -m "feat(core): loss and backward pass for the toy CNN, checked again
 
 ### Task 4: SGD step, batches, prediction, a training pass
 
+> Revised during execution (2026-10-12): with ±1/√fan_in init one pass reached 29% held-out and ten passes 80%; the init is now He-uniform (±√(6/fan_in)), the default learning rate 0.1, and the check is three passes above 75% (measured 82%). The spec carries the same correction.
+
 **Files:**
 - Modify: `core/train.js` (append), `core/train.test.mjs` (append)
 

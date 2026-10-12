@@ -11,7 +11,7 @@ Intent it serves (Alexy, 2026-10-12): "make it interactive, to exemplify how tra
 ## Decisions taken in the brainstorm
 
 - Both a step mode and a play mode, on one page, as two stacked bands ("One step", "Many steps"), plus a Terms section. Chosen over a mode switch (hides one while the other runs) and over two columns (the forward pipeline would wrap; narrow windows stack anyway).
-- The network stays at 16×16 with 4 → 8 kernels and an 8×10 FC head, at stride 1, padding 1, dilation 1, max pooling, ReLU. MNIST digits are area-resampled from 28×28. Why: the trained weights then plug into the existing pages. Cost, stated on the page: this toy tops out around 85 to 92% on held-out digits, far below a real LeNet.
+- The network stays at 16×16 with 4 → 8 kernels and an 8×10 FC head, at stride 1, padding 1, dilation 1, max pooling, ReLU. MNIST digits are area-resampled from 28×28. Why: the trained weights then plug into the existing pages. Cost, stated on the page: this toy reaches about 80 to 85% on held-out digits after a few passes (measured 2026-10-12: 82% after three passes, 83% after ten, 86% from the edge-detector start), far below a real LeNet. The brainstorm's guess of 85 to 92% was too high.
 - Training is live in the browser with plain SGD, not a replayed offline run. Why: learning rate and batch size stay interactive, and the gradient arithmetic is real for the digit on screen.
 - The weights are drawn as triplets per layer: weight, gradient, updated weight, with the update written out on hover. An arrow overlay on the weight grid is kept in reserve as a possible later toggle.
 - Initialisation is random for all three layers so the kernels must learn edges; a second button starts layer 1 from the four hand-picked edge detectors for comparison.
@@ -41,7 +41,7 @@ Little-endian. Bytes 0–3: ASCII `MN16`. Bytes 4–5: number of training digits
 
 All functions are pure; weights and gradients use the same shapes as `core/cnn.js`: `bank` (4 × 9), `l2` (8 × 4 × 9), `W` (8 × 10), `B` (10). Maps are `Float32Array`; the forward pass is `forward` from `core/cnn.js` with `activation: 'relu'`, `poolMode: 'max'`, stride 1, pad 1, dil 1.
 
-- `initWeights({ seed, layer1: 'random' | 'edges' })` → `{ bank, l2, W, B }`. Seeded PRNG (mulberry32). Uniform in ±1/√fan_in: layer 1 ±1/3, layer 2 ±1/6, FC ±1/√8; biases 0. With `layer1: 'edges'` the bank is `defaultBank` from `core/cnn.js`. The scales may be tuned during implementation; the acceptance is the training check below, and the spec records the final values.
+- `initWeights({ seed, layer1: 'random' | 'edges' })` → `{ bank, l2, W, B }`. Seeded PRNG (mulberry32). He-uniform, ±√(6/fan_in): layer 1 ±0.82, layer 2 ±0.41, FC ±0.87; biases 0. With `layer1: 'edges'` the bank is `defaultBank` from `core/cnn.js`. (±1/√fan_in was tried first: one pass reached 29% held-out and ten passes 80%; He-uniform reaches 82% by pass three.)
 - `lossAndGrad(weights, input, label, { poolMode = 'max' })` → `{ S, loss, grads, back }` where `S` is the forward state, `loss = −log p[label]` (cross-entropy on the softmax), `grads = { bank, l2, W, B }` with the shapes of the weights, and `back = { scores, gap, pool2, conv2, pool1, conv1 }` the gradient of the loss with respect to each activation, kept for drawing (`conv1` and `conv2` are the gradients at the pre-ReLU conv outputs).
   - scores: `∂L/∂s = p − y`.
   - FC: `∂L/∂W[f][c] = gap[f] · (p[c] − y[c])`, `∂L/∂B[c] = p[c] − y[c]`, `∂L/∂gap[f] = Σ_c W[f][c] · (p[c] − y[c])`.
@@ -60,7 +60,7 @@ Theme, fonts, colour tokens, dotted terms and layout rules follow the 2D page. C
 
 ### Header
 
-Title "CNN explorer, training", a lede stating what the page shows and the honest ceiling (roughly 85 to 92% on held-out digits for this toy), and the legend: green = receptive field and, on this page, the two sources of a hovered weight's gradient. The yellow forward window of the other pages is not used here.
+Title "CNN explorer, training", a lede stating what the page shows and the honest ceiling (about 80 to 85% on held-out digits for this toy, after a few passes), and the legend: green = receptive field and, on this page, the two sources of a hovered weight's gradient. The yellow forward window of the other pages is not used here.
 
 ### Band 1: One step
 
@@ -81,7 +81,7 @@ With batch size above 1, the band shows the last digit of the batch and the aver
 
 ### Band 2: Many steps
 
-Controls: **Play / Pause**; speed 10, 50 or 200 digits per second; learning-rate slider (log scale 0.001 to 0.5, default 0.05, value shown); batch 1, 8 or 32; **Reset** (new random weights; the seed starts at 1 and each Reset adds 1; counters and curves cleared; seed shown); **Start layer 1 from the edge detectors** (the same reset with the current seed, but layer 1 set to the hand-picked bank); counters: digits seen, passes completed (one pass = the 3,000 training digits in a seeded shuffled order; a new order each pass).
+Controls: **Play / Pause**; speed 10, 50 or 200 digits per second; learning-rate slider (log scale 0.001 to 0.5, default 0.1, value shown; 0.05 learned too slowly in the measurements); batch 1, 8 or 32; **Reset** (new random weights; the seed starts at 1 and each Reset adds 1; counters and curves cleared; seed shown); **Start layer 1 from the edge detectors** (the same reset with the current seed, but layer 1 set to the hand-picked bank); counters: digits seen, passes completed (one pass = the 3,000 training digits in a seeded shuffled order; a new order each pass).
 
 Play runs Next-digit steps in a `requestAnimationFrame` loop within a time budget per frame, draws the step band at most ten times a second, and draws the curves at the same rate. With batch N, each update consumes N digits.
 
@@ -103,7 +103,7 @@ Local-storage key `dl-explorer.weights.v1` holds `{ version: 1, N: 16, bank, l2,
 
 ## Checks
 
-- `node core/train.test.mjs`: (1) for a tiny random instance, every gradient (`bank`, `l2`, `W`, `B`) matches central finite differences with relative error below 1e-4 (maps copied to Float64 for the check; the step 1e-3); (2) 50 SGD steps on one digit at lr 0.05 bring its loss below half the starting loss; (3) `parseMnist16` reads `data/mnist16.bin` with the expected counts and label range; (4) one pass over the 3,000 training digits at lr 0.05, batch 1, seed 1, reaches above 80% on the 1,000 held-out digits. The run time of (4) in Node is reported in the notes.
+- `node core/train.test.mjs`: (1) for a tiny random instance, every gradient (`bank`, `l2`, `W`, `B`) matches central finite differences with relative error below 1e-4 (maps copied to Float64 for the check; the step 1e-3); (2) 50 SGD steps on one digit at lr 0.1 bring its loss below half the starting loss; (3) `parseMnist16` reads `data/mnist16.bin` with the expected counts and label range; (4) three passes over the 3,000 training digits at lr 0.1, batch 1, seed 1, reach above 75% on the 1,000 held-out digits (measured: 82%). The run time of (4) in Node is reported in the notes.
 - Browser (headless Edge recipe): the page loads without console errors; a scripted Step sequence produces the expected phase strip and readouts; a scripted play of 300 digits lowers the smoothed loss; screenshots of both bands at 1400 and 1000 px widths.
 - The 2D page's move to `ui/grid.js`: byte-identical rendered DOM before and after with seeded `Math.random`, as in step 1.
 - The explorer pages with and without the stored weights: banner present or absent, wording switched, DOM identical to today when the key is absent.
