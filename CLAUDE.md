@@ -1,12 +1,13 @@
 # DL architecture explorers — project conventions
 
-Purpose: interactive, visual explanations of how DL architectures compute (CNN first; ViT, ConvNeXt, CoAtNet next). The audience is someone who uses these models daily and wants the concrete steps behind diagrams like "Conv 3×3 → ReLU → MaxPool → … → FC".
+Purpose: interactive, visual explanations of how DL architectures compute (CNN built; then ViT, U-Net, CoAtNet, ConvNeXt, in that order). The audience is someone who uses these models daily and wants the concrete steps behind diagrams like "Conv 3×3 → ReLU → MaxPool → … → FC".
 
 ## Layout
 - `core/` — pure JS model code and shared presets (ES modules, no DOM). Tests: `node core/cnn.test.mjs`.
 - `ui/` — shared DOM helpers: `terms.js` (the `TERMS` array, tooltip, glossary) and `terms.css`; `grid.js` (canvas grids, hit-testing, colours); `trained.js` (trained-weights hand-off through local storage); `blocks3d.js` (the 3D block renderer: scene, instanced cubes, highlights, labels, orbit camera, picking). ES modules, imported by the pages.
 - `data/` — the 16×16 MNIST subset (`mnist16.bin`, format and licence in its README); `tools/` — the standard-library Python script that makes it; `docs/superpowers/` — design specs and implementation plans.
-- `cnn-2d/`, `cnn-3d/`, `cnn-train/` — one self-contained page each. New pages follow the same pattern (`vit/`, `convnext/`, `coatnet/`).
+- `index.html` — the landing page: the colour grammar, then one section per architecture (schematic, a plain definition, its pages as cards, or "what the page will show" while planned). When an architecture gets pages, turn its section's list into cards and its badge into the page count.
+- `cnn-2d/`, `cnn-3d/`, `cnn-train/` — one self-contained page each, with a breadcrumb back to the landing page. New pages follow the same pattern (`vit/`, `unet/`, `coatnet/`, `convnext/`).
 - `models/` — trained weights (JSON/ONNX) when added. Empty for now.
 - No build step. Plain HTML + ES modules served statically (GitHub Pages workflow in `.github/workflows/pages.yml`). Local dev: `python3 -m http.server 8000` from the repo root; modules need http, not file://.
 - External scripts only from cdnjs or jsDelivr, pinned to exact versions. three.js is r128 UMD from cdnjs; OrbitControls is not in that build, so `ui/blocks3d.js` has its own small orbit implementation, used by the 3D explorer and the training page's 3D view.
