@@ -1,12 +1,336 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DL architecture explorers</title>
-<style>body{font-family:system-ui,sans-serif;max-width:720px;margin:60px auto;padding:0 20px;line-height:1.5;color:#1d2430}a{color:#2457a8}li{margin:8px 0}</style></head>
-<body><h1>DL architecture explorers</h1>
-<p>Interactive pages that show what the boxes in an architecture diagram actually compute.</p>
-<ul>
-<li><a href="cnn-2d/">CNN, 2D</a> — convolution step by step, ReLU, pooling, channels, receptive field, to a prediction.</li>
-<li><a href="cnn-3d/">CNN, 3D</a> — the same network as H×W×C blocks, with kernel sweeps and receptive-field cones.</li>
-<li><a href="cnn-train/">CNN, training</a> — real digits stream in; one step in full (forward, loss, backward, update), then the arc of many: curves, kernels learning edges, accuracy on held-out digits. Trained weights load into the other two pages.</li>
-</ul>
-<p>Planned: ViT, ConvNeXt, CoAtNet.</p></body></html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Visualising AI</title>
+<meta name="description" content="Interactive explorers for deep-learning architectures: what each box in the diagram computes, cell by cell, and how training changes it.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap">
+<style>
+:root{
+  --bg:#f7f8f6; --panel:#ffffff; --ink:#1d2430; --ink2:#5b6474; --line:#d9ddd6; --line2:#eef0ec;
+  --accent:#2457a8; --accent-soft:#dde7f7; --pos:#e5641e; --neg:#2a6fd6; --zero:#f3f4f1;
+  --hl:#ffd94a; --hl2:#3fae4b; --scene:#eef0ea;
+  --live-bg:#e2f2e4; --live-ink:#1f6b2b;
+  --in-f:#e4e7e1; --in-t:#f1f3ef; --in-s:#cdd2c8;
+  --act-f:#f7cdb3; --act-t:#fbe3d4; --act-s:#eda881;
+  --tok-f:#c3d7f4; --tok-t:#dde9f9; --tok-s:#9cbcec;
+  --out-f:#2457a8; --out-t:#4d79c0; --out-s:#1a4488;
+  --edge:rgba(29,36,48,.32);
+  --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#171a1f; --panel:#1f232a; --ink:#e8eaee; --ink2:#9aa3b2; --line:#343a44; --line2:#272c35;
+  --accent:#7fa7ea; --accent-soft:#263650; --zero:#2a2f38; --hl:#d9b32d; --hl2:#5ad66a; --scene:#1b1f26;
+  --live-bg:#1e3824; --live-ink:#8fdc9b;
+  --in-f:#3d434d; --in-t:#4b525d; --in-s:#30353d;
+  --act-f:#8c4724; --act-t:#a6582f; --act-s:#6d371b;
+  --tok-f:#2c5082; --tok-t:#38639e; --tok-s:#223f67;
+  --out-f:#7fa7ea; --out-t:#a5c1f1; --out-s:#5d86c8;
+  --edge:rgba(232,234,238,.22);
+}}
+:root[data-theme="dark"]{
+  --bg:#171a1f; --panel:#1f232a; --ink:#e8eaee; --ink2:#9aa3b2; --line:#343a44; --line2:#272c35;
+  --accent:#7fa7ea; --accent-soft:#263650; --zero:#2a2f38; --hl:#d9b32d; --hl2:#5ad66a; --scene:#1b1f26;
+  --live-bg:#1e3824; --live-ink:#8fdc9b;
+  --in-f:#3d434d; --in-t:#4b525d; --in-s:#30353d;
+  --act-f:#8c4724; --act-t:#a6582f; --act-s:#6d371b;
+  --tok-f:#2c5082; --tok-t:#38639e; --tok-s:#223f67;
+  --out-f:#7fa7ea; --out-t:#a5c1f1; --out-s:#5d86c8;
+  --edge:rgba(232,234,238,.22);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto} *{transition:none!important} }
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Public Sans",system-ui,sans-serif;font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+main{max-width:1180px;margin:0 auto;padding:44px 24px 72px}
+a{color:var(--accent)}
+h1{font-size:36px;font-weight:700;letter-spacing:-.015em;margin:0 0 8px}
+.lede{font-size:17px;color:var(--ink2);max-width:72ch;margin:0 0 6px}
+.lede b{color:var(--ink);font-weight:600}
+
+/* architecture chips */
+nav.archs{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0 28px}
+nav.archs a{display:inline-flex;align-items:center;gap:8px;padding:6px 8px 6px 14px;border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--ink);text-decoration:none;font-size:14px;font-weight:500}
+nav.archs a:hover{border-color:var(--accent)}
+.badge{display:inline-block;font-size:11.5px;font-weight:600;letter-spacing:.02em;padding:2px 9px;border-radius:999px;white-space:nowrap}
+.badge.live{background:var(--live-bg);color:var(--live-ink)}
+.badge.next{background:var(--accent-soft);color:var(--accent)}
+.badge.planned{background:var(--line2);color:var(--ink2)}
+a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* how to read the pages */
+.grammar{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 20px;margin-bottom:30px}
+.grammar h2{font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);margin:0 0 10px}
+.keys{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px 26px;font-size:14px;color:var(--ink2)}
+.keys div{display:flex;gap:10px;align-items:flex-start}
+.keys i{flex:0 0 auto;display:inline-block;width:18px;height:18px;border-radius:4px;margin-top:2px}
+.keys .y{border:3px solid var(--hl)} .keys .g{border:3px solid var(--hl2);background:color-mix(in srgb, var(--hl2) 18%, transparent)}
+.keys .d{width:34px;background:linear-gradient(90deg,var(--neg),var(--zero),var(--pos));border:1px solid var(--line)}
+.keys .t{width:auto;height:auto;font-style:normal;color:var(--ink);text-decoration:underline dotted var(--accent);text-underline-offset:3px;font-size:14px;margin-top:0}
+
+/* one section per architecture */
+section.arch{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.12fr);gap:20px 32px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:24px;margin-bottom:22px;scroll-margin-top:16px}
+.arch .fig{background:var(--scene);border-radius:9px;padding:14px 12px 8px;align-self:start}
+.arch .fig svg{display:block;width:100%;height:auto}
+.arch .fig .cap{font-size:12.5px;color:var(--ink2);margin:4px 2px 2px}
+.arch .head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+.arch .num{font-family:var(--mono);font-size:13px;color:var(--ink2)}
+.arch h2{font-size:23px;font-weight:600;letter-spacing:-.01em;margin:0}
+.arch .head .badge{align-self:center}
+.arch p{margin:0 0 10px;max-width:66ch}
+.arch .def{font-size:16.5px;color:var(--ink)}
+.arch .why{color:var(--ink2)}
+.arch .sub{font-size:12.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);margin:14px 0 6px}
+.arch ul{margin:0;padding-left:18px;color:var(--ink2)}
+.arch li{margin:3px 0}
+.arch li b{color:var(--ink);font-weight:500}
+.arch .builds{font-size:13.5px;color:var(--ink2);margin-top:12px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;grid-column:1/-1}
+.card{display:flex;flex-direction:column;gap:4px;border:1px solid var(--line);border-radius:10px;padding:12px 14px;text-decoration:none;color:var(--ink);background:var(--bg)}
+.card:hover{border-color:var(--accent)}
+.card b{display:flex;align-items:center;gap:9px;font-weight:600;font-size:15px}
+.card b svg{flex:0 0 auto}
+.card span{color:var(--ink2);font-size:13.5px;line-height:1.45}
+.card em{font-style:normal;color:var(--accent);font-size:13px;font-weight:500;margin-top:auto;padding-top:4px}
+
+/* diagram drawing */
+svg .f,svg .t,svg .s{stroke:var(--edge);stroke-width:.8;stroke-linejoin:round}
+.k-in .f{fill:var(--in-f)} .k-in .t{fill:var(--in-t)} .k-in .s{fill:var(--in-s)}
+.k-act .f{fill:var(--act-f)} .k-act .t{fill:var(--act-t)} .k-act .s{fill:var(--act-s)}
+.k-tok .f{fill:var(--tok-f)} .k-tok .t{fill:var(--tok-t)} .k-tok .s{fill:var(--tok-s)}
+.k-out .f{fill:var(--out-f)} .k-out .t{fill:var(--out-t)} .k-out .s{fill:var(--out-s)}
+svg .ar{stroke:var(--ink2);stroke-width:1.3;fill:none}
+svg .ah{fill:var(--ink2)}
+svg .lb{fill:var(--ink2);font-size:10.5px;font-family:"Public Sans",system-ui,sans-serif}
+svg .lb.strong{fill:var(--ink);font-weight:600}
+svg .grid{stroke:var(--ink2);stroke-width:.7;opacity:.55}
+svg .glyph{stroke:var(--ink);stroke-width:5;fill:none;stroke-linecap:round;stroke-linejoin:round;opacity:.85}
+svg .att{stroke:var(--accent);stroke-width:.5;opacity:.28}
+svg .att.q{stroke:var(--hl2);stroke-width:1.3;opacity:.95}
+svg .dot{fill:var(--accent)}
+svg .dot.q{fill:var(--hl2)}
+svg .skip{stroke:var(--accent);stroke-width:1.4;stroke-dasharray:4 3;fill:none}
+svg .skiph{fill:var(--accent)}
+svg .win{fill:none;stroke:var(--hl);stroke-width:2}
+svg .divider{stroke:var(--ink2);stroke-width:1;stroke-dasharray:3 3}
+svg .encbox{fill:none;stroke:var(--line);stroke-width:1.2}
+svg .res{stroke:var(--hl2);stroke-width:1.4;fill:none}
+svg .resh{fill:var(--hl2)}
+svg .plus{fill:var(--panel);stroke:var(--ink2);stroke-width:1.2}
+svg .bar{fill:var(--accent)}
+svg .blob{fill:var(--ink);opacity:.75}
+svg .mask{fill:var(--accent)}
+
+footer{border-top:1px solid var(--line);margin-top:34px;padding-top:16px;font-size:13.5px;color:var(--ink2)}
+footer p{margin:0 0 6px;max-width:90ch}
+
+@media (max-width:860px){ section.arch{grid-template-columns:1fr} }
+@media (max-width:600px){ main{padding:28px 16px 56px} h1{font-size:29px} .lede{font-size:16px} section.arch{padding:18px 16px} }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>Visualising AI</h1>
+  <p class="lede">Interactive explorers for deep-learning architectures. Each one takes the boxes of an architecture diagram and shows what they <b>compute</b>: every cell, kernel, weight and gradient can be hovered, and the arithmetic is written out. The networks are small on purpose, so that every number fits on screen.</p>
+  <p class="lede">The convolutional network is built. The Vision Transformer is next, then U-Net, CoAtNet and ConvNeXt.</p>
+</header>
+
+<nav class="archs" aria-label="Architectures">
+  <a href="#cnn">CNN <span class="badge live">3 pages</span></a>
+  <a href="#vit">Vision Transformer <span class="badge next">next</span></a>
+  <a href="#unet">U-Net <span class="badge planned">planned</span></a>
+  <a href="#coatnet">CoAtNet <span class="badge planned">planned</span></a>
+  <a href="#convnext">ConvNeXt <span class="badge planned">planned</span></a>
+</nav>
+
+<div class="grammar" aria-label="How to read the pages">
+  <h2>How to read every page</h2>
+  <div class="keys">
+    <div><i class="y"></i><span><b style="color:var(--ink);font-weight:500">Yellow</b> is the kernel window as it moves forward over its input.</span></div>
+    <div><i class="g"></i><span><b style="color:var(--ink);font-weight:500">Green</b> traces backwards: what a hovered cell sees, or the two sources of a weight's gradient.</span></div>
+    <div><i class="d"></i><span><b style="color:var(--ink);font-weight:500">Blue to orange</b> is negative to positive. In 3D, cube size is magnitude.</span></div>
+    <div><i class="t">term</i><span>A dotted word has its definition on hover; every page ends with its Terms.</span></div>
+  </div>
+</div>
+
+<section class="arch" id="cnn">
+  <div class="fig"><svg data-arch="cnn" viewBox="0 0 440 150" role="img" aria-label="A digit becomes 4 feature maps, is pooled to 8 by 8, becomes 8 maps, is pooled to 4 by 4, averaged to 8 numbers, and turned into 10 class probabilities."></svg>
+    <div class="cap">16×16 digit → conv → pool → conv → pool → average → 10 classes. Depth is channels.</div></div>
+  <div>
+    <div class="head"><span class="num">01</span><h2>Convolutional network</h2><span class="badge live">3 pages</span></div>
+    <p class="def">Small learned filters slide over the image. Stacked, with pooling in between, they turn pixels into edges, edges into shapes, and shapes into a class.</p>
+    <p class="why">It asks, at every position: does the pattern I learned appear here? Each layer sees a slightly wider patch than the one before, so the view grows a few pixels at a time.</p>
+  </div>
+    <div class="cards">
+      <a class="card" href="cnn-2d/"><b><svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><g class="k-act"><rect class="f" x="2" y="2" width="22" height="22" rx="2"/></g><path class="grid" d="M9.3 2v22M16.6 2v22M2 9.3h22M2 16.6h22"/><rect x="2" y="2" width="14.6" height="14.6" fill="none" stroke="var(--hl)" stroke-width="2.4"/></svg>2D explorer</b>
+        <span>Convolution one output cell at a time, then ReLU, pooling, channels and the receptive field, through to a prediction.</span><em>Open →</em></a>
+      <a class="card" href="cnn-3d/"><b><svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><g class="k-act"><path class="t" d="M3 9L9 4H24L18 9Z"/><path class="s" d="M18 9L24 4V18L18 23Z"/><rect class="f" x="3" y="9" width="15" height="14"/></g></svg>3D explorer</b>
+        <span>The same network as height × width × channel blocks: a kernel sweeping through a block, the receptive field as a cone.</span><em>Open →</em></a>
+      <a class="card" href="cnn-train/"><b><svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><path d="M3 4C7 5 8 15 12 17S20 20 23 21" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round"/><path d="M3 23H23M3 3V23" stroke="var(--ink2)" stroke-width="1.2" fill="none"/></svg>Training</b>
+        <span>Real MNIST digits stream in. One gradient step in full, in 2D or 3D, then thousands: kernels learn edges, accuracy climbs to 80–85%.</span><em>Open →</em></a>
+    </div>
+</section>
+
+<section class="arch" id="vit">
+  <div class="fig"><svg data-arch="vit" viewBox="0 0 440 150" role="img" aria-label="An image cut into 16 patches becomes a row of tokens plus a class token; in the encoder every token attends to every other; the class token gives 10 class probabilities."></svg>
+    <div class="cap">Patches → tokens → attention, every token to every other → class token → 10 classes. One token's attention in green.</div></div>
+  <div>
+    <div class="head"><span class="num">02</span><h2>Vision Transformer (ViT)</h2><span class="badge next">next</span></div>
+    <p class="def">Cut the image into patches, turn each patch into a vector called a token, and let every token look at every other one through attention.</p>
+    <p class="why">Where a convolution's view grows a few pixels per layer, attention sees the whole image from the first layer and learns where to look. The price: its cost grows with the square of the number of patches, which is why patches are large.</p>
+    <div class="sub">What the page will show</div>
+    <ul>
+      <li><b>Patch embedding</b> as a convolution whose stride equals its size: the CNN pages' kernel, jumping instead of sliding.</li>
+      <li><b>Position</b> added to each token, since attention by itself does not know where a patch came from.</li>
+      <li><b>One attention head</b> written out: queries against keys, softmax, a weighted sum of values.</li>
+      <li><b>The attention map</b> as a receptive field that is global in one step.</li>
+    </ul>
+    <p class="builds">Builds on the CNN pages: stride, kernels, softmax.</p>
+  </div>
+</section>
+
+<section class="arch" id="unet">
+  <div class="fig"><svg data-arch="unet" viewBox="0 0 440 150" role="img" aria-label="An encoder halves the image three times while adding channels; a decoder doubles it back; dashed skip connections carry each encoder level across to the matching decoder level; the output is a mask the size of the image."></svg>
+    <div class="cap">Encoder down, decoder up, skip connections across. The output is a label per pixel.</div></div>
+  <div>
+    <div class="head"><span class="num">03</span><h2>U-Net, encoder and decoder</h2><span class="badge planned">planned</span></div>
+    <p class="def">An encoder shrinks the image into features, a decoder grows them back to full size, and skip connections hand the fine detail straight across.</p>
+    <p class="why">The CNN here ends in 10 numbers for the whole image. A U-Net ends in an image: a label for every pixel, which is segmentation. The question changes from "what is this?" to "which pixels are it?".</p>
+    <div class="sub">What the page will show</div>
+    <ul>
+      <li><b>The contracting path</b>: the convolutions and pooling of the CNN pages, adding channels as the map shrinks.</li>
+      <li><b>Up-sampling</b> by transposed convolution, the mirror image of a strided one.</li>
+      <li><b>Skip connections</b> joined as extra channels, and what the output loses without them.</li>
+      <li><b>One output pixel's receptive field</b>, reaching down through the bottleneck and across the skips.</li>
+    </ul>
+    <p class="builds">Builds on the CNN pages: convolution, pooling, receptive field.</p>
+  </div>
+</section>
+
+<section class="arch" id="coatnet">
+  <div class="fig"><svg data-arch="coatnet" viewBox="0 0 440 150" role="img" aria-label="A stem, two convolution stages, then two attention stages as the map gets smaller, then 10 classes; a dashed line marks the switch from local to global."></svg>
+    <div class="cap">Convolution stages (C) while the map is large, attention stages (T) once it is small. Yellow: what one output reads.</div></div>
+  <div>
+    <div class="head"><span class="num">04</span><h2>CoAtNet, convolution then attention</h2><span class="badge planned">planned</span></div>
+    <p class="def">Convolution stages first, attention stages after: cheap local detail while the map is large, then global context once it is small.</p>
+    <p class="why">It asks where in the network to stop looking locally and start looking everywhere, and what that switch costs. Its diagram is the one that started this project.</p>
+    <div class="sub">What the page will show</div>
+    <ul>
+      <li><b>MBConv stages</b>: expand the channels, a depthwise convolution, squeeze and excite, project back.</li>
+      <li><b>The switch</b> from local to global, with the receptive field before and after it.</li>
+      <li><b>Attention with a relative position bias</b>, which keeps a little of convolution's sense of neighbourhood.</li>
+      <li><b>The cost of each stage</b>, which explains the order.</li>
+    </ul>
+    <p class="builds">Builds on the CNN and ViT pages.</p>
+  </div>
+</section>
+
+<section class="arch" id="convnext">
+  <div class="fig"><svg data-arch="convnext" viewBox="0 0 440 150" role="img" aria-label="A patchify stem, then one block: a 7 by 7 depthwise convolution with separate channel slices, a 1 by 1 convolution expanding the channels four times, a 1 by 1 convolution projecting them back, and a residual connection adding the block's input."></svg>
+    <div class="cap">Patchify stem, then one block: 7×7 depthwise, expand ×4, project back, add the input.</div></div>
+  <div>
+    <div class="head"><span class="num">05</span><h2>ConvNeXt, a modernised CNN</h2><span class="badge planned">planned</span></div>
+    <p class="def">A plain convolutional network, rebuilt step by step with the design choices that made transformers work, until it matches them.</p>
+    <p class="why">It asks whether attention was the point, or the recipe around it. Each change is small and can be switched on and off.</p>
+    <div class="sub">What the page will show</div>
+    <ul>
+      <li><b>The patchify stem</b>: a 4×4 convolution with stride 4, the ViT patch embedding again.</li>
+      <li><b>7×7 depthwise convolution</b>: one slice per channel and no sum across channels, against the 3×3×C kernel of the CNN pages.</li>
+      <li><b>1×1 convolutions</b> as the channel-mixing step, in an inverted bottleneck that widens four times and narrows back.</li>
+      <li><b>LayerNorm, GELU and the residual connection</b>, and what each changes.</li>
+    </ul>
+    <p class="builds">Builds on the CNN and ViT pages.</p>
+  </div>
+</section>
+
+<footer>
+  <p>Plain HTML and JavaScript modules, no build step, running entirely in your browser. Source on <a href="https://github.com/Smooth-Cactus0/Visualising-AI">GitHub</a>.</p>
+  <p>Digits: the MNIST database by Yann LeCun, Corinna Cortes and Christopher J.C. Burges, CC BY-SA 3.0, shrunk to 16×16 pixels for these pages.</p>
+</footer>
+</main>
+
+<script>
+// Schematic diagrams, drawn from a few shapes: a block is a tensor (front face = height × width, depth = channels).
+(() => {
+  const r = (v) => Math.round(v * 10) / 10;
+  const box = (x, y, w, h, d, k) => { const dx = r(d * 0.62), dy = r(-d * 0.48);
+    return `<g class="k-${k}"><path class="t" d="M${x} ${y}L${r(x + dx)} ${r(y + dy)}L${r(x + w + dx)} ${r(y + dy)}L${x + w} ${y}Z"/><path class="s" d="M${x + w} ${y}L${r(x + w + dx)} ${r(y + dy)}L${r(x + w + dx)} ${r(y + h + dy)}L${x + w} ${y + h}Z"/><rect class="f" x="${x}" y="${y}" width="${w}" height="${h}"/></g>`; };
+  const arrow = (x1, y1, x2, y2) => { const a = Math.atan2(y2 - y1, x2 - x1), L = 5.5, W = 3.2;
+    const bx = x2 - L * Math.cos(a), by = y2 - L * Math.sin(a), px = -Math.sin(a) * W, py = Math.cos(a) * W;
+    return `<line class="ar" x1="${r(x1)}" y1="${r(y1)}" x2="${r(bx)}" y2="${r(by)}"/><path class="ah" d="M${r(x2)} ${r(y2)}L${r(bx + px)} ${r(by + py)}L${r(bx - px)} ${r(by - py)}Z"/>`; };
+  const label = (x, y, t, strong = false) => `<text class="lb${strong ? ' strong' : ''}" x="${r(x)}" y="${r(y)}" text-anchor="middle">${t}</text>`;
+  const bars = (x, cy, n = 10) => { let s = ''; const lens = [6, 9, 4, 22, 7, 5, 11, 3, 8, 6]; for (let i = 0; i < n; i++) s += `<rect class="bar" x="${x}" y="${r(cy - n * 2.5 + i * 5)}" width="${lens[i % 10]}" height="3.2" rx="1"/>`; return s; };
+  // a row of blocks, centred on cy, left to right, with arrows between: specs are [w, h, d, kind, label, extra(x, y) => svg]
+  const row = (specs, { x0 = 10, gap = 16, cy = 74, ly = 140 } = {}) => { let x = x0, out = '', prev = null;
+    for (const [w, h, d, k, lab, extra] of specs) { const dx = d * 0.62, dy = -d * 0.48, y = r(cy - h / 2 - dy / 2);
+      if (prev != null) out += arrow(prev + 3, cy, x - 3, cy);
+      out += box(x, y, w, h, d, k) + (extra ? extra(x, y, w, h) : '') + label(x + (w + dx) / 2, ly, lab); prev = x + w + dx; x = prev + gap; }
+    return { svg: out, x }; };
+
+  const draw = {
+    cnn() {
+      const digit = (x, y) => `<path class="glyph" d="M${x + 19} ${y + 19}H${x + 45}L${x + 28} ${y + 49}"/>`;
+      const { svg, x } = row([[62, 62, 3, 'in', 'digit', digit], [62, 62, 16, 'act', 'conv'], [32, 32, 16, 'act', 'pool'], [32, 32, 30, 'act', 'conv'], [17, 17, 30, 'act', 'pool'], [6, 6, 30, 'act', 'avg']], { gap: 15 });
+      return svg + arrow(x - 12, 74, x, 74) + bars(x + 4, 74) + label(x + 15, 140, '10');
+    },
+    vit() {
+      let s = box(10, 42, 64, 64, 3, 'in') + `<path class="grid" d="M26 42v64M42 42v64M58 42v64M10 58h64M10 74h64M10 90h64"/>` + `<path class="glyph" d="M29 58H55L38 92"/>` + label(43, 140, 'image');
+      s += arrow(80, 74, 94, 74);
+      for (let i = 0; i < 9; i++) s += `<rect class="${i === 0 ? 'bar' : ''}" x="${98 + i * 10}" y="56" width="6.5" height="36" rx="1.5" ${i ? 'fill="var(--tok-f)" stroke="var(--edge)" stroke-width=".8"' : ''}/>`;
+      s += label(98 + 4 * 10 + 3, 140, 'tokens');
+      s += arrow(190, 74, 204, 74);
+      s += `<rect class="encbox" x="208" y="26" width="128" height="96" rx="9"/>`;
+      const top = (i) => 220 + i * 13, yT = 44, yB = 104;
+      for (let i = 0; i < 9; i++) for (let j = 0; j < 9; j++) s += `<line class="att${j === 4 ? ' q' : ''}" x1="${top(i)}" y1="${yT}" x2="${top(j)}" y2="${yB}"/>`;
+      for (let i = 0; i < 9; i++) s += `<circle class="dot" cx="${top(i)}" cy="${yT}" r="2.6"/><circle class="dot${i === 4 ? ' q' : ''}" cx="${top(i)}" cy="${yB}" r="${i === 4 ? 3.4 : 2.6}"/>`;
+      s += label(272, 140, 'encoder × L');
+      s += arrow(340, 74, 356, 74) + `<rect class="bar" x="360" y="56" width="6.5" height="36" rx="1.5"/>` + label(363, 140, 'class') + arrow(371, 74, 386, 74) + bars(392, 74) + label(403, 140, '10');
+      return s;
+    },
+    unet() {
+      let s = `<rect fill="var(--in-f)" stroke="var(--edge)" stroke-width=".8" x="8" y="22" width="36" height="36" rx="2"/><circle class="blob" cx="27" cy="41" r="9"/>` + label(26, 72, 'image');
+      const lev = [{ y: 16, h: 48, w: 5, xs: [64, 72] }, { y: 58, h: 32, w: 7, xs: [104, 114] }, { y: 94, h: 20, w: 9, xs: [142, 154] }];
+      const mir = (x, w) => 440 - x - w; const bar = (x, y, w, h) => `<rect fill="var(--act-f)" stroke="var(--edge)" stroke-width=".8" x="${x}" y="${y}" width="${w}" height="${h}"/>`;
+      lev.forEach((L) => { for (const x of L.xs) s += bar(x, L.y, L.w, L.h) + bar(mir(x, L.w), L.y, L.w, L.h); });
+      s += bar(196, 118, 12, 14) + bar(232, 118, 12, 14) + label(220, 146, 'bottleneck');
+      s += arrow(46, 40, 62, 40) + arrow(378, 40, 394, 40);
+      // down (pool) and up (transposed convolution)
+      s += arrow(78, 66, 102, 72) + arrow(120, 92, 140, 98) + arrow(164, 116, 194, 122);
+      s += arrow(246, 122, 276, 116) + arrow(300, 98, 320, 92) + arrow(338, 72, 362, 66);
+      // skip connections
+      [[79, 361, 40], [123, 310, 74], [165, 274, 104]].forEach(([a, b, y]) => { s += `<line class="skip" x1="${a}" y1="${y}" x2="${b - 6}" y2="${y}"/><path class="skiph" d="M${b} ${y}L${b - 6} ${y - 3.2}L${b - 6} ${y + 3.2}Z"/>`; });
+      s += label(220, 34, 'skip connections');
+      s += `<rect fill="var(--in-f)" stroke="var(--edge)" stroke-width=".8" x="396" y="22" width="36" height="36" rx="2"/><circle class="mask" cx="415" cy="41" r="9"/>` + label(414, 72, 'mask');
+      s += label(92, 128, 'encoder') + label(348, 128, 'decoder');
+      return s;
+    },
+    coatnet() {
+      const win = (x, y, w) => `<rect class="win" x="${x + 3}" y="${y + 3}" width="${Math.max(7, w * 0.3)}" height="${Math.max(7, w * 0.3)}"/>`;
+      const att = (x, y, w, h) => `<rect class="win" x="${x + 1.5}" y="${y + 1.5}" width="${w - 3}" height="${h - 3}"/>`; // attention's window is the whole map
+      const { svg, x } = row([[54, 54, 3, 'in', 'image'], [40, 40, 10, 'act', 'stem'], [32, 32, 16, 'act', 'C', win], [24, 24, 22, 'act', 'C', win], [18, 18, 28, 'tok', 'T', att], [12, 12, 34, 'tok', 'T', att]], { gap: 15 });
+      const sx = 244; // in the gap between the second C stage and the first T stage
+      return svg + `<line class="divider" x1="${sx}" y1="18" x2="${sx}" y2="128"/>` + label(sx - 30, 22, 'local') + label(sx + 32, 22, 'global') + arrow(x - 12, 74, x, 74) + bars(x + 4, 74) + label(x + 15, 140, '10');
+    },
+    convnext() {
+      let s = box(8, 46, 52, 52, 3, 'in') + `<path class="grid" d="M21 46v52M34 46v52M47 46v52M8 59h52M8 72h52M8 85h52"/>` + label(35, 140, 'image');
+      s += arrow(64, 72, 82, 72);
+      s += box(86, 58, 28, 28, 12, 'act') + label(103, 140, 'stem 4×4/4');
+      // the block: depthwise slices, expand, project, add
+      s += `<rect class="encbox" x="134" y="12" width="262" height="112" rx="9"/>`;
+      s += arrow(122, 72, 146, 72);
+      for (let i = 3; i >= 0; i--) s += box(150 + i * 6, 58 - i * 4.6, 28, 28, 1.6, 'act');
+      s += label(176, 140, '7×7 depthwise');
+      s += arrow(204, 72, 218, 72) + box(222, 66, 28, 28, 44, 'act') + label(250, 140, '1×1, ×4');
+      s += arrow(282, 72, 298, 72) + box(302, 64, 28, 28, 12, 'act') + label(320, 140, '1×1');
+      s += arrow(342, 72, 358, 72) + `<circle class="plus" cx="368" cy="72" r="8"/><path d="M364 72h8M368 68v8" stroke="var(--ink)" stroke-width="1.4"/>` + label(368, 140, 'add');
+      s += `<path class="res" d="M130 58C130 18 368 6 368 58"/><path class="resh" d="M368 64L364.6 57L371.4 57Z"/>` + label(250, 40, 'residual');
+      return s;
+    },
+  };
+  document.querySelectorAll('svg[data-arch]').forEach((el) => { el.innerHTML = draw[el.dataset.arch](); });
+})();
+</script>
+</body>
+</html>
