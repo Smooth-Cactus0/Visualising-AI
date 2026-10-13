@@ -53,7 +53,8 @@ input[type=range]{accent-color:var(--accent)}
 .math{font-family:var(--mono);font-size:12.5px;line-height:1.7;background:var(--line2);border-radius:6px;padding:10px 12px;overflow-x:auto;white-space:pre-wrap;min-height:3.2em;margin-top:10px}
 .math .sum{color:var(--accent);font-weight:600}
 .note{font-size:13.5px;color:var(--ink2);border-left:3px solid var(--accent-soft);padding:4px 12px;margin:0 0 22px;max-width:72ch}
-.pipe{display:flex;gap:12px 14px;align-items:flex-start;flex-wrap:wrap;padding:6px 2px 12px}
+.pipe{display:flex;gap:12px 14px;align-items:flex-start;flex-wrap:nowrap;padding:6px 2px 12px}
+.pipe.wrap{flex-wrap:wrap}
 .stage{flex:0 0 auto;text-align:center;font-size:12.5px;color:var(--ink2)}
 .stage .t{font-weight:500;color:var(--ink);margin-bottom:6px;white-space:nowrap}
 .stack{display:grid;gap:6px}
@@ -419,7 +420,27 @@ function renderPlay() {
   for (const r of recent) { const d = document.createElement('div'); const cv = canvas(32); drawGrid(cv, r.input, N, N, {}); const t = document.createElement('div'); const ok = r.pred === r.label; t.className = ok ? 'ok' : 'no'; t.textContent = `${r.label}${ok ? '✓' : '✗'}`; t.title = `label ${r.label}, guessed ${r.pred}`; d.append(cv, t); th.append(d); }
 }
 
-function renderAll() { renderPhase(); if (rep === '3d') render3d(); else { renderForward(); renderBackward(); renderTrips(); } readout(); renderPlay(); }
+// The forward and backward rows stay on one line: their grids are drawn at full size, then shown smaller until the wider row fits.
+// Below half size (phones) the rows wrap instead. The scale is kept between redraws and found again when the window is resized.
+let pipeK = 1, pipeWrap = false;
+function scalePipes() {
+  for (const cv of document.querySelectorAll('#fwd canvas, #bwd canvas')) { cv.style.width = cv.width * pipeK + 'px'; cv.style.height = cv.height * pipeK + 'px'; }
+  for (const b of document.querySelectorAll('#fwd .bars')) b.style.minWidth = Math.round(220 * pipeK) + 'px';
+  for (const r of [$('fwd'), $('bwd')]) r.style.columnGap = pipeWrap ? '' : Math.max(4, Math.round(14 * pipeK)) + 'px'; // the gaps around the arrows shrink too
+}
+function fitPipes() {
+  const rows = [$('fwd'), $('bwd')]; rows.forEach((r) => r.classList.toggle('wrap', pipeWrap)); scalePipes(); if (pipeWrap) return;
+  for (let i = 0; i < 6; i++) {
+    const avail = rows[0].clientWidth, need = Math.max(...rows.map((r) => r.scrollWidth));
+    if (need <= avail + 1) return;
+    pipeK *= (avail / need) * 0.98; // text does not shrink with the grids, hence a few rounds
+    if (pipeK < 0.5) { pipeK = 1; pipeWrap = true; rows.forEach((r) => r.classList.add('wrap')); scalePipes(); return; }
+    scalePipes();
+  }
+}
+let resizeTimer = 0;
+addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { pipeK = 1; pipeWrap = false; if (data && rep === '2d') renderAll(); }, 150); });
+function renderAll() { renderPhase(); if (rep === '3d') render3d(); else { renderForward(); renderBackward(); fitPipes(); renderTrips(); } readout(); renderPlay(); }
 
 // ---------- 3D representation (blocks of cubes; the renderer is shared in ../ui/blocks3d.js) ----------
 const VIEW_KEY = 'dl-explorer.train.view', LAYOUT_KEY = 'dl-explorer.train.layout', GX = 7, WGZ = 3; // WGZ: depth gap between weight blocks
