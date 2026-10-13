@@ -66,4 +66,4 @@ The explorer keeps: `defineBlocks` (its seven stages with data accessors from it
 
 ## Left for later, on purpose
 
-The depth layout in the training view; animating the kernel sweep during a step; a 3D view of the play band's kernel history.
+The depth layout in the training view (built 2026-10-13, see `2026-10-13-cnn-training-live-depth-design.md`); animating the kernel sweep during a step; a 3D view of the play band's kernel history.
