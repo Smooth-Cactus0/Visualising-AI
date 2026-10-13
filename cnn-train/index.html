@@ -94,6 +94,8 @@ input[type=range]{accent-color:var(--accent)}
 .lbl{position:absolute;transform:translate(-50%,-100%);font-size:12.5px;color:var(--ink2);text-align:center;pointer-events:none;white-space:nowrap;line-height:1.3}
 .lbl b{display:block;color:var(--ink);font-weight:600}
 .cams{position:absolute;top:10px;left:10px;display:flex;gap:6px;flex-wrap:wrap;z-index:1}
+.cams.right{left:auto;right:10px}
+@media (max-width: 640px){ .cams.right{top:auto;bottom:10px} }
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--panel)}
 .seg button{border:0;border-radius:0}
 .seg button+button{border-left:1px solid var(--line)}
@@ -112,7 +114,7 @@ button.sel{background:var(--accent-soft);border-color:var(--accent)}
 
 <section id="s1">
   <div class="head"><h2>One step</h2><span class="n">digit → forward → loss → backward → update</span>
-    <p>Step runs one phase at a time; Next digit finishes this digit and brings the next one in. While Many steps plays, this band stays still; pause to see the current digit. Forward is what the other pages show. Backward is new: the gradient of the loss starts at the class scores as p − y and flows back through the same shapes, and each weight's gradient is what came forward times what came back at that weight. Update nudges every weight by learning rate × gradient, the other way. Hover any cell or weight for its arithmetic.</p></div>
+    <p>Step runs one phase at a time; Next digit finishes this digit and brings the next one in. While Many steps plays, this band follows the training: each digit it shows is caught after its backward pass, with the update it is about to get (at the faster speeds, one digit in several); hover a cell or a weight to watch it change from digit to digit. Forward is what the other pages show. Backward is new: the gradient of the loss starts at the class scores as p − y and flows back through the same shapes, and each weight's gradient is what came forward times what came back at that weight. Update nudges every weight by learning rate × gradient, the other way. Hover any cell or weight for its arithmetic. In 3D, side by side stacks the same rows; depth sends each row away from you along the data flow, as on the 3D explorer, and sets the rows next to each other as lanes: forward, its gradients, then w, ∂L/∂w and w′.</p></div>
   <div class="ctrls">
     <span class="seg"><button id="rep2d" class="sel">2D</button><button id="rep3d">3D</button></span>
     <span class="phase" id="phase"><b data-p="0">digit</b>→<b data-p="1">forward</b>→<b data-p="2">backward</b>→<b data-p="3">update</b></span>
@@ -128,7 +130,8 @@ button.sel{background:var(--accent-soft);border-color:var(--accent)}
   <div class="trips" id="trips"></div>
   </div>
   <div id="band3d" hidden>
-    <div id="view3d"><div class="cams"><button data-cam="whole" class="sel">whole</button><button data-cam="forward">forward</button><button data-cam="backward">backward</button><button data-cam="weights">weights</button><button id="recenter3d" title="reset orientation and zoom">⟲ recentre</button></div></div>
+    <div id="view3d"><div class="cams"><button data-cam="whole" class="sel">whole</button><button data-cam="forward">forward</button><button data-cam="backward">backward</button><button data-cam="weights">weights</button><button id="recenter3d" title="reset orientation and zoom">⟲ recentre</button></div>
+      <div class="cams right"><span class="seg"><button id="laySide3d" class="sel">side by side</button><button id="layDepth3d">depth</button></span></div></div>
     <div class="lat"><span>start</span><input type="range" id="lateral3d" min="0" max="1000" value="500" title="scroll along the network"><span>end</span></div>
   </div>
   <div class="math" id="readout"></div>
@@ -139,7 +142,7 @@ button.sel{background:var(--accent-soft);border-color:var(--accent)}
     <p>Play repeats the step for digit after digit. The loss curve shows the loss per digit, which is noisy, and its running average. Accuracy is measured two ways: on the last 200 training digits, and every 200 digits on 1,000 held-out test digits the network never trains on. The strip of kernels shows layer 1 at fixed milestones: with random initialisation it has to discover edges on its own; "start from edge detectors" begins from the hand-picked ones instead. Expect a plateau first: for several hundred digits the loss sits near 2.3, which is −log(1/10), a coin toss over ten classes, because eight averages of random kernels barely separate the digits. Then it drops. From the edge detectors it drops at once.</p></div>
   <div class="ctrls">
     <button id="playBtn" class="primary">Play</button>
-    <label class="ctl">speed <select id="speed"><option value="10">10 / s</option><option value="50">50 / s</option><option value="200" selected>200 / s</option></select></label>
+    <label class="ctl">speed <select id="speed"><option value="2">2 / s</option><option value="10">10 / s</option><option value="50">50 / s</option><option value="200" selected>200 / s</option></select></label>
     <label class="ctl">learning rate <input type="range" id="lr" min="0" max="100" value="74" style="width:120px"><span class="lrv" id="lrv">0.1</span></label>
     <label class="ctl">batch <select id="batch"><option>1</option><option>8</option><option>32</option></select></label>
     <button id="resetBtn">Reset</button><button id="edgesBtn">Start layer 1 from edge detectors</button>
@@ -191,7 +194,7 @@ let shown = null;        // the gradient drawn in the triplets: this digit's, or
 let prevWeights = null, anim = null;  // for the update animation
 let probe = null;        // hover state, see readout()
 let lossRaw = [], lossEma = [], ema = null, trainFlags = [], accTrain = [], accTest = [], lastTest = null, snaps = [], recent = [];
-let playing = false, carry = 0, lastFrame = 0, lastDraw = 0;
+let playing = false, carry = 0, lastFrame = 0, lastDraw = 0, drawn = null;  // drawn: the digit the band last showed during play
 
 // ---------- the training step, in phases ----------
 function loadDigit() {
@@ -219,7 +222,10 @@ function record(d) {
   if (MILESTONES.includes(digitsSeen)) snaps.push({ at: digitsSeen, bank: weights.bank.map((k) => k.slice()) });
 }
 function evalTest() { lastTest = accuracy(weights, data.test, testIdx); accTest.push([digitsSeen, lastTest]); }
-function trainOne() { loadDigit(); doForward(); doBackward(); doUpdate(); }
+function advance() { // play: finish the digit on show, then take the next one up to its update, so the band always has a whole step to show
+  if (cur.phase === 0) doForward(); if (cur.phase === 1) doBackward(); if (cur.phase === 2) doUpdate();
+  loadDigit(); doForward(); doBackward();
+}
 function step() {
   if (cur.phase === 3) loadDigit(); else if (cur.phase === 0) doForward(); else if (cur.phase === 1) doBackward(); else { doUpdate(); if (cur.applied && !reduced) startAnim(); }
   renderAll();
@@ -243,13 +249,14 @@ function frame(ts) {
   const dt = lastFrame ? Math.min(0.1, (ts - lastFrame) / 1000) : 0; lastFrame = ts;
   carry = Math.min(carry + speed * dt, Math.max(1, speed / 10));
   const t0 = performance.now();
-  while (carry >= 1 && performance.now() - t0 < 12) { trainOne(); carry -= 1; }
-  if (ts - lastDraw > 100) { renderPlay(); lastDraw = ts; }
+  while (carry >= 1 && performance.now() - t0 < 12) { advance(); carry -= 1; }
+  if (ts - lastDraw > 100) { if (cur !== drawn) { drawn = cur; renderAll(); } else renderPlay(); lastDraw = ts; } // the band follows, at most 10 times a second
   requestAnimationFrame(frame);
 }
 function setPlaying(p) {
   playing = p; $('playBtn').textContent = p ? 'Pause' : 'Play';
-  if (p) { lastFrame = 0; carry = 0; anim = null; probe = null; $('readout').textContent = 'Playing. The step band stays on the last digit it showed; pause to see the current digit in full.'; requestAnimationFrame(frame); }
+  if (p) { if (cur.phase === 0) doForward(); if (cur.phase === 1) doBackward(); // the digit on show goes straight to its backward pass
+    lastFrame = 0; carry = 0; anim = null; drawn = cur; renderAll(); requestAnimationFrame(frame); }
   else renderAll();
 }
 
@@ -360,6 +367,7 @@ function readout() {
   const ro = $('readout'); const p = probe, S = cur.S, g = gradShown();
   const upd = (wv, gv) => `w′ = w − lr·∂L/∂w = ${fmt(wv)} − ${fmt(lr)}×${fmt(gv)} = <span class="sum">${fmt(wv - lr * gv)}</span>`;
   const avgNote = batch > 1 && collected.length > 1 ? ` (gradient averaged over ${collected.length} digits so far)` : '';
+  if (!p && playing) { ro.innerHTML = `Playing. The band shows each digit after its backward pass, with the update it is about to get${speed > 10 ? `: about one digit in ${Math.round(speed / 10)} at ${speed} a second` : ''}. Hover any cell or weight to follow its value from digit to digit; pause to step through the digit on show.`; return; }
   if (!p) {
     ro.innerHTML = cur.phase === 0 ? 'A digit is loaded. Step runs the forward pass.'
       : cur.phase === 1 ? `Forward done: the network says ${cur.pred}, the label is ${cur.label}. loss = −log p[${cur.label}] = −log ${fmt(S.prob[cur.label])} = <span class="sum">${fmt(cur.loss)}</span>. Step runs the backward pass.`
@@ -414,12 +422,19 @@ function renderPlay() {
 function renderAll() { renderPhase(); if (rep === '3d') render3d(); else { renderForward(); renderBackward(); renderTrips(); } readout(); renderPlay(); }
 
 // ---------- 3D representation (blocks of cubes; the renderer is shared in ../ui/blocks3d.js) ----------
-const VIEW_KEY = 'dl-explorer.train.view', GX = 7;
+const VIEW_KEY = 'dl-explorer.train.view', LAYOUT_KEY = 'dl-explorer.train.layout', GX = 7, WGZ = 3; // WGZ: depth gap between weight blocks
+const O1 = N, Q1 = N / 2, Q2 = N / 4; // map sizes after conv 1, pool 1, pool 2 (padding keeps conv sizes)
 let rep = '2d', view3d = null, built3d = '', curPreset = 'whole', fitted3d = false;
 function ensureView3d() {
   if (view3d) return;
-  view3d = createBlockView($('view3d'), { explode: 0.7, layout: 'side', gapX: GX, rowGap: 22, lateral: $('lateral3d'), ease: reduced ? 1 : 0.12 });
-  view3d.onPick(onPick3d); view3d.start();
+  let layout = 'side'; try { if (localStorage.getItem(LAYOUT_KEY) === 'depth') layout = 'depth'; } catch { /* storage blocked */ }
+  view3d = createBlockView($('view3d'), { explode: 0.7, layout, gapX: GX, rowGap: 22, laneGap: 26, lateral: $('lateral3d'), linkStages: [0, 1], ease: reduced ? 1 : 0.12 });
+  markLayout(layout); view3d.onPick(onPick3d); view3d.start();
+}
+function markLayout(l) { $('laySide3d').classList.toggle('sel', l === 'side'); $('layDepth3d').classList.toggle('sel', l === 'depth'); }
+function setLayout3d(l) {
+  view3d.layout = l; markLayout(l); try { localStorage.setItem(LAYOUT_KEY, l); } catch { /* the choice just is not remembered */ }
+  render3d(); camPreset3d(curPreset);
 }
 function setRep(r) {
   rep = r; try { localStorage.setItem(VIEW_KEY, r); } catch { /* storage blocked: the choice just is not remembered */ }
@@ -430,55 +445,75 @@ function setRep(r) {
   if (r === '3d') camPreset3d(curPreset);
 }
 const flatW = (M) => { const o = new Float32Array(C2 * NC); for (let f = 0; f < C2; f++) for (let c = 0; c < NC; c++) o[f * NC + c] = M[f][c]; return o; };
-function defs3d() { // the blocks for the current phase: forward row, gradient row beneath it, then w · ∂L/∂w · w′ rows
-  const S = cur.S, ph = cur.phase, g = gradShown(), w = shownWeights; // w() is read at draw time, so the update fade shows
+function defs3d(full = false) { // the blocks for the current phase (or, full, for a complete step): forward row, gradient row beneath it, then w · ∂L/∂w · w′ rows
+  // Data and scales are functions read when the view draws, from whatever digit is current: a new digit in the same phase is a refresh, not a rebuild.
+  const ph = full ? 2 : cur.phase, hasG = full || !!gradShown(), w = shownWeights, g = gradShown, depth = view3d.layout === 'depth';
+  const S = { O: O1, Q: Q1, Q2 }, F = () => cur.S, Bk = () => cur.back;
   const ab = (arrs) => Math.max(...arrs.map(maxAbs)); const shape = (rows, cols, chans) => `${rows}×${cols}×${chans}`; const D = [];
   const fwd = [['in', 'digit', N, N, 1, 'gray', () => cur.input, 1]];
-  if (ph >= 1) fwd.push(['conv1', 'conv 1 + ReLU', S.O, S.O, C1, 'div', (ch) => S.a1[ch], ab(S.a1)], ['pool1', 'pool 1', S.Q, S.Q, C1, 'div', (ch) => S.p1[ch], ab(S.p1)],
-    ['conv2', 'conv 2 + ReLU', S.Q, S.Q, C2, 'div', (ch) => S.a2[ch], ab(S.a2)], ['pool2', 'pool 2', S.Q2, S.Q2, C2, 'div', (ch) => S.p2[ch], ab(S.p2)],
-    ['gap', 'global avg', 1, 1, C2, 'div', (ch) => [S.gap[ch]], maxAbs(S.gap)], ['scores', 'softmax', NC, 1, 1, 'div', () => S.prob, 1]);
+  if (ph >= 1) fwd.push(['conv1', 'conv 1 + ReLU', S.O, S.O, C1, 'div', (ch) => F().a1[ch], () => ab(F().a1)], ['pool1', 'pool 1', S.Q, S.Q, C1, 'div', (ch) => F().p1[ch], () => ab(F().p1)],
+    ['conv2', 'conv 2 + ReLU', S.Q, S.Q, C2, 'div', (ch) => F().a2[ch], () => ab(F().a2)], ['pool2', 'pool 2', S.Q2, S.Q2, C2, 'div', (ch) => F().p2[ch], () => ab(F().p2)],
+    ['gap', 'global avg', 1, 1, C2, 'div', (ch) => [F().gap[ch]], () => maxAbs(F().gap)], ['scores', 'softmax', NC, 1, 1, 'div', () => F().prob, 1]);
   let x = 0; const xs = {};
   for (const [id, title, rows, cols, chans, mode, data, scale] of fwd) { xs[id] = x; D.push({ id, label: `${title}\n${id === 'scores' ? NC + ' classes' : id === 'gap' ? '1×1×' + C2 : shape(rows, cols, chans)}`, rows, cols, chans, mode, data, scale, row: 0, x0: x }); x += cols + GX; }
-  if (ph >= 2) { const B = cur.back;
-    for (const [id, title, rows, cols, chans, data, scale] of [['conv1', '∂L/∂conv 1', S.O, S.O, C1, (ch) => B.conv1[ch], ab(B.conv1)], ['pool1', '∂L/∂pool 1', S.Q, S.Q, C1, (ch) => B.pool1[ch], ab(B.pool1)],
-      ['conv2', '∂L/∂conv 2', S.Q, S.Q, C2, (ch) => B.conv2[ch], ab(B.conv2)], ['pool2', '∂L/∂pool 2', S.Q2, S.Q2, C2, (ch) => B.pool2[ch], ab(B.pool2)],
-      ['gap', '∂L/∂gap', 1, 1, C2, (ch) => [B.gap[ch]], maxAbs(B.gap)], ['scores', '∂L/∂scores = p − y', NC, 1, 1, () => B.scores, 1]])
-      D.push({ id: 'd_' + id, label: `${title}\n${shape(rows, cols, chans)}`, rows, cols, chans, mode: 'div', data, scale, row: 1, x0: xs[id] }); }
+  if (ph >= 2) {
+    for (const [id, title, rows, cols, chans, data, scale] of [['conv1', '∂L/∂conv 1', S.O, S.O, C1, (ch) => Bk().conv1[ch], () => ab(Bk().conv1)], ['pool1', '∂L/∂pool 1', S.Q, S.Q, C1, (ch) => Bk().pool1[ch], () => ab(Bk().pool1)],
+      ['conv2', '∂L/∂conv 2', S.Q, S.Q, C2, (ch) => Bk().conv2[ch], () => ab(Bk().conv2)], ['pool2', '∂L/∂pool 2', S.Q2, S.Q2, C2, (ch) => Bk().pool2[ch], () => ab(Bk().pool2)],
+      ['gap', '∂L/∂gap', 1, 1, C2, (ch) => [Bk().gap[ch]], () => maxAbs(Bk().gap)], ['scores', '∂L/∂scores = p − y', NC, 1, 1, () => Bk().scores, 1]])
+      D.push({ id: 'd_' + id, label: `${title}\n${shape(rows, cols, chans)}`, rows, cols, chans, mode: 'div', data, scale, row: 1, x0: xs[id], at: id }); }
   const sB = () => ab(w().bank), sL = () => Math.max(...w().l2.flat().map(maxAbs)), sW = () => maxAbs(flatW(w().W)), sb = () => maxAbs(w().B);
-  const gB = g ? ab(g.bank) : 1, gL = g ? Math.max(...g.l2.flat().map(maxAbs)) : 1, gW = g ? maxAbs(flatW(g.W)) : 1, gb = g ? maxAbs(g.B) : 1;
+  const gB = () => ab(g().bank), gL = () => Math.max(...g().l2.flat().map(maxAbs)), gW = () => maxAbs(flatW(g().W)), gb = () => maxAbs(g().B);
   const nxt = (a, d) => a.map((v, q) => v - lr * d[q]);
-  const kinds = [['w', 2, 'w']]; if (g) kinds.push(['∂L/∂w', 3, 'g'], ['w′ = w − lr·∂L/∂w', 4, 'n']);
+  const kinds = [['w', 2, 'w']]; if (hasG) kinds.push(['∂L/∂w', 3, 'g'], ['w′ = w − lr·∂L/∂w', 4, 'n']);
   for (const [title, row, kind] of kinds) {
     const ver = (getW, getG) => (kind === 'g' ? getG : kind === 'n' ? (ch) => nxt(getW(ch), getG(ch)) : getW);
     const sc = (sw, sg) => (kind === 'g' ? sg : sw);
     let x = 0;
-    D.push({ id: 'bank_' + kind, label: row === 2 ? 'layer-1 kernels\n3×3×4' : title + '\n ', rows: 3, cols: 3, chans: C1, mode: 'div', data: ver((ch) => w().bank[ch], (ch) => g.bank[ch]), scale: sc(sB, gB), row, x0: x }); x += 3 + GX;
-    for (let k = 0; k < C2; k++) { D.push({ id: `l2_${k}_${kind}`, label: row === 2 && k === 0 ? 'layer-2 kernels\n8 × 3×3×4' : null, rows: 3, cols: 3, chans: C1, mode: 'div', data: ver((ch) => w().l2[k][ch], (ch) => g.l2[k][ch]), scale: sc(sL, gL), row, x0: x }); x += 3 + GX; }
-    D.push({ id: 'W_' + kind, label: row === 2 ? 'FC weights\n8×10' : null, rows: C2, cols: NC, chans: 1, mode: 'div', data: ver(() => flatW(w().W), () => flatW(g.W)), scale: sc(sW, gW), row, x0: x }); x += NC + GX;
-    D.push({ id: 'B_' + kind, label: row === 2 ? 'FC biases\n1×10' : null, rows: 1, cols: NC, chans: 1, mode: 'div', data: ver(() => w().B, () => g.B), scale: sc(sb, gb), row, x0: x });
+    D.push({ id: 'bank_' + kind, label: row === 2 ? 'layer-1 kernels\n3×3×4' : title + '\n ', rows: 3, cols: 3, chans: C1, mode: 'div', data: ver((ch) => w().bank[ch], (ch) => g().bank[ch]), scale: sc(sB, gB), row, x0: x, gapZ: WGZ }); x += 3 + GX;
+    for (let k = 0; k < C2; k++) { D.push({ id: `l2_${k}_${kind}`, label: row === 2 && k === 3 ? 'layer-2 kernels\n8 × 3×3×4' : null, rows: 3, cols: 3, chans: C1, mode: 'div', data: ver((ch) => w().l2[k][ch], (ch) => g().l2[k][ch]), scale: sc(sL, gL), row, x0: x, gapZ: WGZ }); x += 3 + GX; } // the label sits over the middle of the eight
+    const Wd = { id: 'W_' + kind, label: row === 2 ? 'FC weights\n8×10' : null, rows: C2, cols: NC, chans: 1, mode: 'div', data: ver(() => flatW(w().W), () => flatW(g().W)), scale: sc(sW, gW), row, x0: x, gapZ: WGZ }; x += NC + GX;
+    const Bd = { id: 'B_' + kind, label: row === 2 ? 'FC biases\n1×10' : null, rows: 1, cols: NC, chans: 1, mode: 'div', data: ver(() => w().B, () => g().B), scale: sc(sb, gb), row, x0: x, gapZ: 2 * WGZ };
+    if (depth) D.push(Bd, Wd); else D.push(Wd, Bd); // in depth the biases come first, so the two labels do not land on each other
   }
   return D;
 }
 function render3d() {
-  const key = `${cur.i}:${cur.phase}:${collected.length}:${cur.applied}`;
+  const key = `${view3d.layout}:${cur.phase >= 1}:${cur.phase >= 2}:${!!gradShown()}`; // which rows exist, and how they are laid out; values are read on every refresh
   if (key !== built3d) { built3d = key; view3d.setBlocks(defs3d()); if (!fitted3d) { fitted3d = true; camPreset3d('whole'); } }
   else view3d.refresh();
   highlights3d();
 }
-function fit(ids, theta, phi, pad) { // frame the given blocks: distance from their extent and the camera's fields of view
-  const bx = new THREE.Box3(); for (const id of ids) { const b = view3d.blockById(id); if (b) bx.union(view3d.bounds(b, 0, b.rows - 1, 0, b.cols - 1, 0, b.chans - 1)); }
+const extentOf = (blocks) => { const bx = new THREE.Box3(); for (const b of blocks) bx.union(view3d.bounds(b, 0, b.rows - 1, 0, b.cols - 1, 0, b.chans - 1)); return bx; };
+function fit(blocks, theta, phi, pad) { // frame the given blocks: distance from their extent and the camera's fields of view
+  const bx = extentOf(blocks);
   if (bx.isEmpty()) return;
   const size = bx.getSize(new THREE.Vector3()), centre = bx.getCenter(new THREE.Vector3());
   const vf = (38 / 2) * Math.PI / 180, hf = Math.atan(Math.tan(vf) * view3d.camera.aspect);
   const dist = Math.max(size.y / (2 * Math.tan(vf)), size.x / (2 * Math.tan(hf))) * pad + size.z;
   view3d.setGoal({ theta, phi, dist, target: centre });
 }
+function fitDepth(blocks, theta, phi, pad) { // depth layout: a long, tapering scene seen from above, so frame it by projecting every block's corners
+  if (!blocks.length) return;
+  const corners = []; for (const b of blocks) { const bx = view3d.bounds(b, 0, b.rows - 1, 0, b.cols - 1, 0, b.chans - 1); for (const x of [bx.min.x, bx.max.x]) for (const y of [bx.min.y, bx.max.y]) for (const z of [bx.min.z, bx.max.z]) corners.push(new THREE.Vector3(x, y, z)); }
+  const cam = new THREE.PerspectiveCamera(38, view3d.camera.aspect, 0.1, 5000), q = new THREE.Vector3();
+  const head = 2 * 44 / Math.max(200, $('view3d').clientHeight); // room above the top blocks for their two-line labels, in clip units
+  const dir = new THREE.Vector3(Math.sin(phi) * Math.sin(theta), Math.cos(phi), Math.sin(phi) * Math.cos(theta)), target = extentOf(blocks).getCenter(new THREE.Vector3());
+  const extent = (dist) => { cam.position.copy(target).addScaledVector(dir, dist); cam.lookAt(target); cam.updateMatrixWorld(); let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, front = true;
+    for (const p of corners) { q.copy(p).project(cam); if (q.z >= 1) front = false; x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y); } return { x0, x1, y0, y1: y1 + head, front }; };
+  let dist = 100;
+  for (let pass = 0; pass < 4; pass++) { // fit the distance, then slide the target so the projected scene is centred, and again
+    let lo = 1, hi = 3000; for (let k = 0; k < 40; k++) { const mid = (lo + hi) / 2; const e = extent(mid); if (e.front && Math.max(-e.x0, e.x1, -e.y0, e.y1) * pad <= 1) hi = mid; else lo = mid; } dist = hi;
+    const e = extent(dist), halfH = Math.tan((38 / 2) * Math.PI / 180) * dist, halfW = halfH * cam.aspect;
+    target.addScaledVector(new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 0), (e.x0 + e.x1) / 2 * halfW).addScaledVector(new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 1), (e.y0 + e.y1) / 2 * halfH);
+  }
+  view3d.setGoal({ theta, phi, dist, target });
+}
+const PRESET_ROWS = { whole: [0, 1, 2, 3, 4], forward: [0], backward: [0, 1], weights: [2, 3, 4] };
+const SIDE_CAM = { whole: [0.4, 1.25, 1.15], forward: [0.45, 1.15, 1.35], backward: [0.45, 1.2, 1.35], weights: [0.3, 1.2, 1.5] }; // theta, phi, padding
+const DEPTH_CAM = { whole: [0.15, 0.9, 1.04], forward: [0.55, 0.72, 1.06], backward: [0.35, 0.8, 1.05], weights: [0.15, 0.85, 1.05] };
 function camPreset3d(name) {
-  curPreset = name; const inRows = (rs) => view3d.blocks.filter((b) => rs.includes(b.row || 0)).map((b) => b.id);
-  if (name === 'whole') fit(inRows([0, 1, 2, 3, 4]), 0.4, 1.25, 1.15);
-  if (name === 'forward') fit(inRows([0]), 0.45, 1.15, 1.35);
-  if (name === 'backward') fit(inRows([0, 1]), 0.45, 1.2, 1.35);
-  if (name === 'weights') fit(inRows([2, 3, 4]), 0.3, 1.2, 1.5);
+  curPreset = name; const blocks = view3d.place(defs3d(true)).filter((b) => PRESET_ROWS[name].includes(b.row || 0)); // a complete step's layout: the frame stays put as rows come and go
+  if (view3d.layout === 'side') fit(blocks, ...SIDE_CAM[name]); else fitDepth(blocks, ...DEPTH_CAM[name]);
   document.querySelectorAll('#view3d .cams button[data-cam]').forEach((x) => x.classList.toggle('sel', x.dataset.cam === name));
 }
 function onPick3d(hit) { // a picked cube becomes one of the probes the readout already understands
@@ -527,6 +562,7 @@ function highlights3d() {
 }
 $('rep2d').onclick = () => setRep('2d'); $('rep3d').onclick = () => setRep('3d');
 $('recenter3d').onclick = () => camPreset3d(curPreset);
+$('laySide3d').onclick = () => setLayout3d('side'); $('layDepth3d').onclick = () => setLayout3d('depth');
 document.querySelectorAll('#view3d .cams button[data-cam]').forEach((x) => { x.onclick = () => camPreset3d(x.dataset.cam); });
 
 // ---------- controls ----------
