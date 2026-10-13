@@ -3,7 +3,7 @@
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 /** Short number: '0', '1.5', '-0.33'. */
-export const fmt = (v) => { if (Math.abs(v) < 1e-9) return '0'; const s = v.toFixed(2); return s.replace(/\.?0+$/, ''); };
+export const fmt = (v) => { if (Math.abs(v) < 1e-9) return '0'; const s = v.toFixed(2).replace(/\.?0+$/, ''); return s === '-0' ? '0' : s; }; // no "-0" for tiny negatives
 export const isDark = () => document.documentElement.dataset.theme === 'dark' || (matchMedia('(prefers-color-scheme: dark)').matches && document.documentElement.dataset.theme !== 'light');
 export const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
