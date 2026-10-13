@@ -3,19 +3,25 @@
 // picking and the render loop. Needs the global THREE (r128 UMD) loaded by the page, the page's --scene token
 // for the background, and a .lbl style for labels. Everything page-specific (which blocks, camera presets,
 // what a picked cube means) stays in the page.
+// Blocks sit in rows. Side by side: a row runs left to right and rows stack downwards (rowGap apart).
+// Depth: a row runs away from the viewer along z and rows become lanes next to each other (laneGap apart).
+// A block with `at: <id>` takes that block's place along the flow, so a row can line up under another;
+// `gapZ` on a block overrides the depth gap after it. `place(defs)` lays blocks out without building them (for camera fits).
 import { isDark, cssVar } from './grid.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const C_NEG = new THREE.Color(0x2a6fd6), C_POS = new THREE.Color(0xe5641e);
+const Z_LIGHT = new THREE.Color(0xdfe2dc), Z_DARK = new THREE.Color(0x3a404a), INK_LIGHT = new THREE.Color(0x202020), INK_DARK = new THREE.Color(0xf0f0f0);
 
-/** Cube colour for a value: 'gray' maps 0–1 to ink on the scene tone, 'div' maps −scale..scale blue to orange. */
-export function colorFor(v, scale, mode) {
-  const c = new THREE.Color(); const zero = isDark() ? new THREE.Color(0x3a404a) : new THREE.Color(0xdfe2dc);
-  if (mode === 'gray') { const t = clamp(v, 0, 1); return c.copy(zero).lerp(isDark() ? new THREE.Color(0xf0f0f0) : new THREE.Color(0x202020), t); }
-  const t = clamp(v / scale, -1, 1); return c.copy(zero).lerp(t < 0 ? C_NEG : C_POS, Math.abs(t));
+/** Cube colour for a value: 'gray' maps 0–1 to ink on the scene tone, 'div' maps −scale..scale blue to orange.
+ *  `dark` and `out` let a caller colouring thousands of cubes skip the theme lookup and the allocation. */
+export function colorFor(v, scale, mode, dark = isDark(), out = new THREE.Color()) {
+  const zero = dark ? Z_DARK : Z_LIGHT;
+  if (mode === 'gray') { const t = clamp(v, 0, 1); return out.copy(zero).lerp(dark ? INK_DARK : INK_LIGHT, t); }
+  const t = clamp(v / scale, -1, 1); return out.copy(zero).lerp(t < 0 ? C_NEG : C_POS, Math.abs(t));
 }
 
-export function createBlockView(viewEl, { explode = 0.7, layout = 'side', gapX = 5, gapZ = 7, rowGap = 22, lateral = null, linkStages = false, ease = 0.12 } = {}) {
+export function createBlockView(viewEl, { explode = 0.7, layout = 'side', gapX = 5, gapZ = 7, rowGap = 22, laneGap = 26, lateral = null, linkStages = false, ease = 0.12 } = {}) {
   const renderer = new THREE.WebGLRenderer({ antialias: true }); renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1)); viewEl.append(renderer.domElement);
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 1000);
@@ -42,10 +48,11 @@ export function createBlockView(viewEl, { explode = 0.7, layout = 'side', gapX =
 
   // ---- blocks ----
   const zOf = (ch) => -ch * (1 + view.explode);
-  function layoutOffsets() { let z = 0; view.blocks.forEach((b) => { b.z0 = z; z -= b.chans * (1 + view.explode) + gapZ; }); }
-  function voxelPos(b, r, c, ch) { const y = (b.rows - 1 - r) - (b.rows - 1) / 2 + (b.y0 || 0);
-    if (view.layout === 'side') return new THREE.Vector3(b.x0 + c, y, zOf(ch));
-    return new THREE.Vector3(c - (b.cols - 1) / 2, y, b.z0 + zOf(ch)); }
+  function layoutOffsets(list = view.blocks) { // depth: each row recedes on its own, a block with `at` starts where that block starts
+    const z = {}, at = {}; list.forEach((b) => { const row = b.row || 0; b.z0 = b.at != null && at[b.at] != null ? at[b.at] : (z[row] ?? 0); at[b.id] = b.z0; z[row] = b.z0 - (b.chans * (1 + view.explode) + (b.gapZ ?? gapZ)); }); }
+  function voxelPos(b, r, c, ch) { const y = (b.rows - 1 - r) - (b.rows - 1) / 2;
+    if (view.layout === 'side') return new THREE.Vector3(b.x0 + c, y + (b.y0 || 0), zOf(ch));
+    return new THREE.Vector3(c - (b.cols - 1) / 2 + (b.row || 0) * laneGap, y, b.z0 + zOf(ch)); }
   // bounding box of a cell range across channels ch0..ch1 (indices may run outside the block, e.g. padding)
   function bounds(b, r0, r1, c0, c1, ch0, ch1) { const bx = new THREE.Box3(); [[r0, c0, ch0], [r1, c1, ch1], [r0, c1, ch0], [r1, c0, ch1]].forEach(([r, c, ch]) => { const p = voxelPos(b, r, c, ch); bx.expandByPoint(p.clone().addScalar(-0.5)); bx.expandByPoint(p.clone().addScalar(0.5)); }); return bx; }
   const flowAxis = () => (view.layout === 'side' ? 'x' : 'z');
@@ -57,27 +64,32 @@ export function createBlockView(viewEl, { explode = 0.7, layout = 'side', gapX =
     return pts; }
   function connect(bxA, bxB, material, group) { const s = flowSign() > 0; const A = faceCorners(bxA, s), Bc = faceCorners(bxB, !s); const pts = []; for (let i = 0; i < 4; i++) pts.push(A[i], Bc[i]);
     const g = new THREE.BufferGeometry().setFromPoints(pts); group.add(new THREE.LineSegments(g, material)); }
-  function updateStageLinks() { stage.clear(); if (!linkStages || view.layout !== 'depth') return;
-    for (let i = 0; i + 1 < view.blocks.length; i++) { const A = view.blocks[i], Bb = view.blocks[i + 1]; connect(bounds(A, 0, A.rows - 1, 0, A.cols - 1, 0, A.chans - 1), bounds(Bb, 0, Bb.rows - 1, 0, Bb.cols - 1, 0, Bb.chans - 1), mats.stageLine, stage); } }
-  function setBlocks(defs) {
-    net.clear(); const cursors = {};
-    view.blocks = defs.filter((d) => !d.hidden).map((d) => {
+  const linked = (b) => linkStages === true || (Array.isArray(linkStages) && linkStages.includes(b.row || 0));
+  function updateStageLinks() { stage.clear(); if (!linkStages || view.layout !== 'depth') return; // consecutive blocks of a row; linkStages: true, or the rows to link
+    for (let i = 0; i + 1 < view.blocks.length; i++) { const A = view.blocks[i], Bb = view.blocks[i + 1]; if ((A.row || 0) !== (Bb.row || 0) || !linked(A)) continue; connect(bounds(A, 0, A.rows - 1, 0, A.cols - 1, 0, A.chans - 1), bounds(Bb, 0, Bb.rows - 1, 0, Bb.cols - 1, 0, Bb.chans - 1), mats.stageLine, stage); } }
+  function place(defs) { // positions only: x0 (side), y0 (row), z0 (depth)
+    const cursors = {}, xs = {};
+    const list = defs.filter((d) => !d.hidden).map((d) => {
       const b = { ...d }; const row = b.row || 0;
-      if (b.x0 == null) b.x0 = cursors[row] || 0;
-      cursors[row] = b.x0 + b.cols + gapX; b.y0 = -row * rowGap;
-      const mesh = new THREE.InstancedMesh(cubeGeo, mat, b.rows * b.cols * b.chans); mesh.userData.block = b; b.mesh = mesh; net.add(mesh);
-      return b; });
+      if (b.x0 == null) b.x0 = b.at != null && xs[b.at] != null ? xs[b.at] : cursors[row] || 0; xs[b.id] = b.x0;
+      cursors[row] = b.x0 + b.cols + gapX; b.y0 = -row * rowGap; return b; });
+    layoutOffsets(list); return list;
+  }
+  function setBlocks(defs) {
+    net.children.forEach((m) => m.dispose()); net.clear(); // dispose frees the instance buffers of a rebuild
+    view.blocks = place(defs).map((b) => { const mesh = new THREE.InstancedMesh(cubeGeo, mat, b.rows * b.cols * b.chans); mesh.userData.block = b; b.mesh = mesh; net.add(mesh); return b; });
     refresh(); return view.blocks;
   }
   const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3();
+  const _col = new THREE.Color();
   function refresh() { // positions + colours
-    layoutOffsets();
+    layoutOffsets(); const dark = isDark();
     view.blocks.forEach((b) => { let i = 0; const scale = typeof b.scale === 'function' ? b.scale() : b.scale;
       for (let ch = 0; ch < b.chans; ch++) { const d = b.data(ch);
         for (let r = 0; r < b.rows; r++) for (let c = 0; c < b.cols; c++) { const v = d[r * b.cols + c];
           const t = b.mode === 'gray' ? clamp(v, 0, 1) : clamp(Math.abs(v) / scale, 0, 1);
           const sc = 0.16 + 0.84 * t; _s.set(sc, sc, sc); _m.compose(voxelPos(b, r, c, ch), _q, _s); b.mesh.setMatrixAt(i, _m);
-          b.mesh.setColorAt(i, colorFor(v, scale, b.mode)); i++; } }
+          b.mesh.setColorAt(i, colorFor(v, scale, b.mode, dark, _col)); i++; } }
       b.mesh.instanceMatrix.needsUpdate = true; if (b.mesh.instanceColor) b.mesh.instanceColor.needsUpdate = true; });
     updateStageLinks();
   }
@@ -155,7 +167,7 @@ export function createBlockView(viewEl, { explode = 0.7, layout = 'side', gapX =
     cam.theta += (camGoal.theta - cam.theta) * ease; cam.phi += (camGoal.phi - cam.phi) * ease; cam.dist += (camGoal.dist - cam.dist) * ease; cam.target.lerp(camGoal.target, ease);
     applyCam(); renderer.setClearColor(new THREE.Color(cssVar('--scene'))); renderer.render(scene, camera); syncLabels(); syncLateral(); requestAnimationFrame(loop); }
 
-  Object.assign(view, { setBlocks, refresh, blockById, voxelPos, bounds, flowRange, flowAxis, centerOf, boxAt, boxSpanZ, connect, setGoal, cam, goal: camGoal, resize,
+  Object.assign(view, { setBlocks, place, refresh, blockById, voxelPos, bounds, flowRange, flowAxis, centerOf, boxAt, boxSpanZ, connect, setGoal, cam, goal: camGoal, resize,
     onPick: (cb) => { pickCb = cb; }, start: () => { running = true; applyCam(); loop(); }, clear: (group) => group.clear() });
   return view;
 }
