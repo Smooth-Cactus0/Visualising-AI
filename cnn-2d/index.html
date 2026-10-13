@@ -95,10 +95,12 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .ledger .p i{display:block;height:10px;border-radius:3px;background:var(--accent);margin:4px 0}
 .ledger .p.none i{background:var(--line)}
 @media (prefers-reduced-motion: reduce){ *{transition:none!important} }
+.crumb{font-size:13px;color:var(--ink2);margin:0 0 10px}.crumb a{color:var(--accent);text-decoration:none}.crumb a:hover{text-decoration:underline}
 </style>
 </head>
 <body>
 <main>
+<nav class="crumb"><a href="../">Visualising AI</a> › CNN, 2D explorer</nav>
 <h1>CNN explorer</h1>
 <p class="lede">A stage diagram says "Conv 3×3 → ReLU → MaxPool → … → FC". This page shows the arithmetic those boxes stand for, on an input you draw, with every intermediate tensor visible all the way to the class scores. Everything downstream recomputes when you change something upstream.</p>
 <div class="keys"><span><i></i> window the kernel is currently reading (forward)</span><span><i class="g"></i> receptive field: hover any cell of any map to see every upstream patch that feeds it, back to the pixels</span></div>

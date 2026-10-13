@@ -63,10 +63,12 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .keys span{display:inline-flex;align-items:center;gap:5px}
 .keys i{display:inline-block;width:12px;height:12px;border-radius:3px;border:3px solid var(--hl)}
 .keys i.g{border-color:var(--hl2)}
+.crumb{font-size:13px;color:var(--ink2);margin:0 0 10px}.crumb a{color:var(--accent);text-decoration:none}.crumb a:hover{text-decoration:underline}
 </style>
 </head>
 <body>
 <main>
+<nav class="crumb"><a href="../">Visualising AI</a> › CNN, 3D explorer</nav>
 <h1>CNN explorer, in 3D</h1>
 <p class="lede">The same toy network as the 2D page, drawn as what it is: a sequence of H×W×C blocks. Depth is channels. Cube size is magnitude, colour is sign (blue negative, orange positive). Drag to orbit, scroll to zoom, right-drag to pan, and use the bar under the view to travel along the network. "Side by side" lays the stages out left to right; "depth" sends them away from you along the data-flow axis and draws the connections between stages, so the funnel from 16×16 down to 10 numbers is visible as a shape. Hover any cube for its receptive field; use the sweep controls to watch a kernel move through a block — the layer-2 kernel is a 3×3×4 cube that eats all four channels at once.</p>
 <div class="wrap">

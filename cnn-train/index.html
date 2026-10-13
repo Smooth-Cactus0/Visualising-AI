@@ -104,10 +104,12 @@ button.sel{background:var(--accent-soft);border-color:var(--accent)}
 .lat{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:12.5px;color:var(--ink2)}
 .lat input{flex:1}
 @media (prefers-reduced-motion: reduce){ *{transition:none!important} }
+.crumb{font-size:13px;color:var(--ink2);margin:0 0 10px}.crumb a{color:var(--accent);text-decoration:none}.crumb a:hover{text-decoration:underline}
 </style>
 </head>
 <body>
 <main>
+<nav class="crumb"><a href="../">Visualising AI</a> › CNN, training</nav>
 <h1>CNN explorer, training</h1>
 <p class="lede">The same toy network as the other two pages, now learning. Real MNIST digits, shrunk to 16×16, come in one at a time: the network guesses, the loss says how wrong the guess was, the error flows back through the layers to give every weight a gradient, and every weight moves a little the other way. That is training; the rest is repetition. Step through one digit below, then play to watch the weights change over thousands. Being a toy of 12 kernels on 16×16 pixels, it reaches about 80 to 85% on digits it has never seen after a few passes, well short of a real LeNet's 99%, but every mechanism is the real one.</p>
 <div class="keys"><span><i></i> receptive field of a hovered cell, and the two sources of a hovered weight's gradient</span></div>
