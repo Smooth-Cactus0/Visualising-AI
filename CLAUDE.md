@@ -14,7 +14,8 @@ Purpose: interactive, visual explanations of how DL architectures compute (CNN b
 
 ## Design rules (keep these)
 - Visual and interactive over tables and text. The owner explicitly removed a table; don't reintroduce one.
-- Linked highlighting across views is the core interaction. Yellow = forward kernel window; green = receptive field (backward). Keep the two colours distinct and consistent across every page.
+- Linked highlighting across views is the core interaction. Yellow = forward kernel window; green = what a value is computed from: an activation's receptive field (upstream), a gradient's sources (downstream, up to the loss), a weight gradient's two maps, and on the training page the step of the backward pass just taken. Keep the two colours distinct and consistent across every page.
+- Weights sit where they act: between the map they read and the map they make, marked as learned (tinted column in 2D, accent frame in 3D). Where training is shown, three rows: forward (activations and w), backward (each gradient under what it is the gradient of), update (w′ under each weight). This is the layout to reuse for the next architectures.
 - Hovering a cell anywhere traces its receptive field through every upstream tensor. At the head (global average, classes) show only the direct link, not the full cone back to the input.
 - Every technical term gets a dotted inline definition (tooltip) and an entry in a Terms section. The mechanism is shared: `ui/terms.js` (`TERMS` array, `installTerms()`) with `ui/terms.css`; every page imports it rather than carrying a copy.
 - Weights: layer-1 kernels are hand-picked edge detectors; layer-2 and FC are random. Pages must say so wherever a prediction appears. The training page (`cnn-train/`) trains all three layers live; its weights can be loaded into the explorer pages, which then say so in a banner and in their wording.
