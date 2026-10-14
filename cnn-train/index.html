@@ -14,16 +14,16 @@
   --bg:#f7f8f6; --panel:#ffffff; --ink:#1d2430; --ink2:#5b6474; --line:#d9ddd6; --line2:#eef0ec;
   --accent:#2457a8; --accent-soft:#dde7f7;
   --pos:#e5641e; --neg:#2a6fd6; --zero:#f3f4f1;
-  --hl:#ffd94a; --hl2:#3fae4b; --scene:#eef0ea;
+  --hl:#ffd94a; --hl2:#3fae4b; --scene:#eef0ea; --wtint:rgba(36,87,168,.07);
   --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
 }
 @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
   --bg:#171a1f; --panel:#1f232a; --ink:#e8eaee; --ink2:#9aa3b2; --line:#343a44; --line2:#272c35;
-  --accent:#7fa7ea; --accent-soft:#263650; --zero:#2a2f38; --hl:#d9b32d; --hl2:#5ad66a; --scene:#1b1f26;
+  --accent:#7fa7ea; --accent-soft:#263650; --zero:#2a2f38; --hl:#d9b32d; --hl2:#5ad66a; --scene:#1b1f26; --wtint:rgba(127,167,234,.09);
 }}
 :root[data-theme="dark"]{
   --bg:#171a1f; --panel:#1f232a; --ink:#e8eaee; --ink2:#9aa3b2; --line:#343a44; --line2:#272c35;
-  --accent:#7fa7ea; --accent-soft:#263650; --zero:#2a2f38; --hl:#d9b32d; --hl2:#5ad66a; --scene:#1b1f26;
+  --accent:#7fa7ea; --accent-soft:#263650; --zero:#2a2f38; --hl:#d9b32d; --hl2:#5ad66a; --scene:#1b1f26; --wtint:rgba(127,167,234,.09);
 }
 html{scroll-padding-top:env(safe-area-inset-top,0px);}
 *{box-sizing:inherit}
@@ -36,6 +36,8 @@ p{margin:0 0 10px;max-width:68ch}
 .keys{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--ink2);margin-bottom:26px}
 .keys span{display:inline-flex;align-items:center;gap:6px}
 .keys i{display:inline-block;width:14px;height:14px;border-radius:3px;border:3px solid var(--hl2)}
+.keys i.front{border-width:2px;background:transparent}
+.keys i.wt{border:1px solid var(--accent);background:var(--wtint)}
 section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin-bottom:22px}
 .head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:12px}
 .head .n{font-family:var(--mono);color:var(--ink2);font-size:13px}
@@ -53,15 +55,30 @@ input[type=range]{accent-color:var(--accent)}
 .math{font-family:var(--mono);font-size:12.5px;line-height:1.7;background:var(--line2);border-radius:6px;padding:10px 12px;overflow-x:auto;white-space:pre-wrap;min-height:3.2em;margin-top:10px}
 .math .sum{color:var(--accent);font-weight:600}
 .note{font-size:13.5px;color:var(--ink2);border-left:3px solid var(--accent-soft);padding:4px 12px;margin:0 0 22px;max-width:72ch}
-.pipe{display:flex;gap:12px 14px;align-items:flex-start;flex-wrap:nowrap;padding:6px 2px 12px}
-.pipe.wrap{flex-wrap:wrap}
-.stage{flex:0 0 auto;text-align:center;font-size:12.5px;color:var(--ink2)}
-.stage .t{font-weight:500;color:var(--ink);margin-bottom:6px;white-space:nowrap}
-.stack{display:grid;gap:6px}
-.stack canvas{cursor:crosshair}
-.arrow{flex:0 0 auto;align-self:center;color:var(--ink2);font-size:18px;padding-top:18px}
-.arrow.msg{font-size:13px;padding-top:0}
-.bars{display:grid;grid-template-columns:auto 1fr auto;gap:4px 8px;align-items:center;min-width:220px;text-align:left}
+.netwrap{overflow-x:auto;margin-top:12px;border:1px solid var(--line2);border-radius:10px;background:var(--bg)}
+.net{display:grid;width:max-content;align-items:start;column-gap:6px;row-gap:12px;padding:10px 16px 14px 0}
+.net .hd{align-self:end;text-align:center;font-size:12.5px;color:var(--ink2);line-height:1.3;padding:0 4px}
+.net .hd b{display:block;font-weight:500;color:var(--ink);white-space:nowrap}
+.net .hd span{font-family:var(--mono);font-size:11.5px}
+.net .hd.w b{color:var(--accent)}
+.net .cell{border-radius:8px;padding:4px 6px;min-width:44px}
+.net .cell.w{background:var(--wtint)}
+.net .cell.pending canvas,.net .cell.pending .tag{opacity:.28}
+.net .cell.front{box-shadow:inset 0 0 0 2px var(--hl2)}
+.net .cell.empty{visibility:hidden}
+.net canvas{cursor:crosshair}
+.net .slots{display:grid;justify-items:center;align-items:center}
+.net .kern{display:flex;gap:3px}
+.net .brow{display:flex;align-items:center;gap:6px}
+.net .pyrow{display:flex;align-items:center;gap:6px;min-width:70px}
+.net .tag{font-family:var(--mono);font-size:11px;color:var(--ink2)}
+.net .op{height:288px;display:flex;align-items:center;justify-content:center;color:var(--ink2);font-size:18px;min-width:14px;cursor:default}
+.net .op.back{color:var(--line)} .net .op.back.done{color:var(--ink2)} .net .op.back.on{color:var(--hl2);font-weight:700}
+.net .rowlab{position:sticky;left:0;z-index:2;align-self:stretch;writing-mode:vertical-rl;transform:rotate(180deg);text-align:center;font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);background:var(--bg);padding:0 6px;border-left:1px solid var(--line2)}
+.net .outbox{display:flex;flex-direction:column;gap:6px}
+.net .loss{font-size:12.5px;color:var(--ink2);text-align:center;margin-top:4px}
+.net .hint{font-size:12.5px;color:var(--ink2);font-style:italic;max-width:120px;text-align:center}
+.bars{display:grid;grid-template-columns:auto 1fr auto;grid-auto-rows:24px;column-gap:8px;align-items:center;min-width:190px;text-align:left}
 .bars .lab{font-family:var(--mono);font-size:12.5px;color:var(--ink2)}
 .bars .bar{height:14px;background:var(--line2);border-radius:3px;overflow:hidden;cursor:pointer}
 .bars .bar i{display:block;height:100%;background:var(--accent);opacity:.75}
@@ -73,12 +90,6 @@ input[type=range]{accent-color:var(--accent)}
 .phase b{font-weight:500;padding:2px 9px;border-radius:12px;border:1px solid var(--line);color:var(--ink2)}
 .phase b.done{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
 .phase b.next{border-style:dashed;color:var(--ink)}
-.trips{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start;margin-top:6px}
-.trip{text-align:center;font-size:12px;color:var(--ink2)}
-.trip .t{font-weight:500;color:var(--ink);margin-bottom:4px;white-space:nowrap}
-.trip .g{display:inline-flex;gap:8px;align-items:flex-end}
-.trip .g span{display:block;font-size:11px;margin-top:2px;font-family:var(--mono)}
-.trip canvas{cursor:crosshair;margin:0 auto}
 .curves{display:flex;gap:18px;flex-wrap:wrap;margin-top:6px}
 .curves > div{flex:1 1 320px;min-width:0}
 .curves canvas{width:100%;height:170px;background:var(--bg);border:1px solid var(--line2)}
@@ -112,28 +123,21 @@ button.sel{background:var(--accent-soft);border-color:var(--accent)}
 <nav class="crumb"><a href="../">Visualising AI</a> › CNN, training</nav>
 <h1>CNN explorer, training</h1>
 <p class="lede">The same toy network as the other two pages, now learning. Real MNIST digits, shrunk to 16×16, come in one at a time: the network guesses, the loss says how wrong the guess was, the error flows back through the layers to give every weight a gradient, and every weight moves a little the other way. That is training; the rest is repetition. Step through one digit below, then play to watch the weights change over thousands. Being a toy of 12 kernels on 16×16 pixels, it reaches about 80 to 85% on digits it has never seen after a few passes, well short of a real LeNet's 99%, but every mechanism is the real one.</p>
-<div class="keys"><span><i></i> receptive field of a hovered cell, and the two sources of a hovered weight's gradient</span></div>
+<div class="keys"><span><i></i> what a hovered value is computed from: upstream for an activation, downstream for a gradient, the two maps for a weight's gradient</span><span><i class="front"></i> what the last backward step computed</span><span><i class="wt"></i> learned weights</span></div>
 <div class="note" id="status">Loading 4,000 digits (1 MB)…</div>
 
 <section id="s1">
-  <div class="head"><h2>One step</h2><span class="n">digit → forward → loss → backward → update</span>
-    <p>Step runs one phase at a time; Next digit finishes this digit and brings the next one in. While Many steps plays, this band follows the training: each digit it shows is caught after its backward pass, with the update it is about to get (at the faster speeds, one digit in several); hover a cell or a weight to watch it change from digit to digit. Forward is what the other pages show. Backward is new: the gradient of the loss starts at the class scores as p − y and flows back through the same shapes, and each weight's gradient is what came forward times what came back at that weight. Update nudges every weight by learning rate × gradient, the other way. Hover any cell or weight for its arithmetic. In 3D, side by side stacks the same rows; depth sends each row away from you along the data flow, as on the 3D explorer, and sets the rows next to each other as lanes: forward, its gradients, then w, ∂L/∂w and w′.</p></div>
+  <div class="head"><h2>One step</h2><span class="n">digit → forward → backward, a layer at a time → update</span>
+    <p>The network is laid out as the data flows, left to right, and each layer's weights sit between the map they read and the map they make: the layer-1 kernels between the digit and conv 1, the layer-2 kernels between pool 1 and conv 2, the FC weights between the averages and the scores. Channel k is one horizontal line through its kernel, its maps, its average and its row of FC weights. Step runs one phase at a time. Forward is what the other pages show. Backward is new: the gradient of the loss starts at the class scores as p − y and flows back, right to left, a layer per step, through the same shapes; each step frames in green what it computed. A weight's gradient is what came forward into it times what came back out of it, the two maps either side of it. Update moves every weight to w′ = w − learning rate × gradient, shown under each weight. Next digit finishes this digit and brings the next one in. While Many steps plays, the band follows the training, one digit in several at the faster speeds. Hover any cell or weight for its arithmetic and, in green, what it was computed from. In 3D the same three rows are stacked side by side, or, in depth, sent away from you along the data flow and set next to each other.</p></div>
   <div class="ctrls">
     <span class="seg"><button id="rep2d" class="sel">2D</button><button id="rep3d">3D</button></span>
-    <span class="phase" id="phase"><b data-p="0">digit</b>→<b data-p="1">forward</b>→<b data-p="2">backward</b>→<b data-p="3">update</b></span>
+    <span class="phase" id="phase"><b data-p="0">digit</b>→<b data-p="1">forward</b>→<b data-p="2">back: FC</b>→<b data-p="3">back: layer 2</b>→<b data-p="4">back: layer 1</b>→<b data-p="5">update</b></span>
     <button id="stepBtn" class="primary">Step</button><button id="nextBtn">Next digit</button>
     <span class="cap" id="digitInfo"></span>
   </div>
-  <div id="band2d">
-  <div class="cap" style="margin-top:12px">Forward: what came in</div>
-  <div class="pipe" id="fwd"></div>
-  <div class="cap">Backward: the error flowing back through the same shapes</div>
-  <div class="pipe" id="bwd"></div>
-  <div class="cap">Weights: w · ∂L/∂w · w′ = w − lr·∂L/∂w</div>
-  <div class="trips" id="trips"></div>
-  </div>
+  <div id="band2d"><div class="netwrap"><div class="net" id="net"></div></div></div>
   <div id="band3d" hidden>
-    <div id="view3d"><div class="cams"><button data-cam="whole" class="sel">whole</button><button data-cam="forward">forward</button><button data-cam="backward">backward</button><button data-cam="weights">weights</button><button id="recenter3d" title="reset orientation and zoom">⟲ recentre</button></div>
+    <div id="view3d"><div class="cams"><button data-cam="whole" class="sel">whole</button><button data-cam="forward">forward</button><button data-cam="backward">backward</button><button data-cam="update">update</button><button id="recenter3d" title="reset orientation and zoom">⟲ recentre</button></div>
       <div class="cams right"><span class="seg"><button id="laySide3d" class="sel">side by side</button><button id="layDepth3d">depth</button></span></div></div>
     <div class="lat"><span>start</span><input type="range" id="lateral3d" min="0" max="1000" value="500" title="scroll along the network"><span>end</span></div>
   </div>
@@ -144,11 +148,11 @@ button.sel{background:var(--accent-soft);border-color:var(--accent)}
   <div class="head"><h2>Many steps</h2><span class="n">play · curves · kernels over time · held-out accuracy</span>
     <p>Play repeats the step for digit after digit. The loss curve shows the loss per digit, which is noisy, and its running average. Accuracy is measured two ways: on the last 200 training digits, and every 200 digits on 1,000 held-out test digits the network never trains on. The strip of kernels shows layer 1 at fixed milestones: with random initialisation it has to discover edges on its own; "start from edge detectors" begins from the hand-picked ones instead. Expect a plateau first: for several hundred digits the loss sits near 2.3, which is −log(1/10), a coin toss over ten classes, because eight averages of random kernels barely separate the digits. Then it drops. From the edge detectors it drops at once.</p></div>
   <div class="ctrls">
-    <button id="playBtn" class="primary">Play</button>
+    <button id="playBtn" class="primary">Play</button><button id="resetBtn" title="new random weights, and the curves, kernels and digits cleared">Restart</button>
     <label class="ctl">speed <select id="speed"><option value="2">2 / s</option><option value="10">10 / s</option><option value="50">50 / s</option><option value="200" selected>200 / s</option></select></label>
     <label class="ctl">learning rate <input type="range" id="lr" min="0" max="100" value="74" style="width:120px"><span class="lrv" id="lrv">0.1</span></label>
     <label class="ctl">batch <select id="batch"><option>1</option><option>8</option><option>32</option></select></label>
-    <button id="resetBtn">Reset</button><button id="edgesBtn">Start layer 1 from edge detectors</button>
+    <button id="edgesBtn" title="restart, with layer 1 starting from the hand-picked edge detectors">Restart from edge detectors</button>
     <span class="counts" id="counts"></span>
   </div>
   <div class="curves">
@@ -174,7 +178,7 @@ button.sel{background:var(--accent-soft);border-color:var(--accent)}
 <script type="module">
 import { footprint } from '../core/cnn.js';
 import { parseMnist16, image } from '../core/data.js';
-import { initWeights, lossAndGrad, sgdStep, averageGrads, accuracy, shuffledOrder } from '../core/train.js';
+import { initWeights, lossAndGrad, sgdStep, averageGrads, accuracy, shuffledOrder, gradFootprint } from '../core/train.js';
 import { installTerms } from '../ui/terms.js';
 import { fmt, maxAbs, drawGrid, cellAt, cssVar } from '../ui/grid.js';
 import { createBlockView } from '../ui/blocks3d.js';
@@ -191,29 +195,34 @@ const argmax = (p) => p.reduce((b, v, i) => (v > p[b] ? i : b), 0);
 let data = null, testIdx = [];
 let seed = 1, layer1 = 'random', lr = 0.1, batch = 1, speed = 200;
 let weights = null, order = [], orderPos = 0, passes = 0, digitsSeen = 0;
-let cur = null;          // { i, input, label, phase 0..3, S, loss, grads, back, pred, applied }
+let cur = null;          // { i, input, label, phase (see P), S, loss, grads, back, pred, applied }
 let collected = [];      // gradients of the batch in progress
-let shown = null;        // the gradient drawn in the triplets: this digit's, or the batch average so far
+let shown = null;        // the gradient drawn: this digit's, or the batch average so far
 let prevWeights = null, anim = null;  // for the update animation
 let probe = null;        // hover state, see readout()
 let lossRaw = [], lossEma = [], ema = null, trainFlags = [], accTrain = [], accTest = [], lastTest = null, snaps = [], recent = [];
 let playing = false, carry = 0, lastFrame = 0, lastDraw = 0, drawn = null;  // drawn: the digit the band last showed during play
 
 // ---------- the training step, in phases ----------
+// A digit goes through six phases. Its gradient is computed in one go when the backward pass starts (core/train.js);
+// the band then reveals it a layer at a time, from the loss back towards the input, so the propagation can be followed.
+const P = { DIGIT: 0, FWD: 1, BFC: 2, BL2: 3, BL1: 4, UPD: 5 };
+const REVEAL = { fc: P.BFC, l2: P.BL2, l1: P.BL1 };   // when each layer's gradients appear
+const revealed = (layer) => !!cur && cur.phase >= REVEAL[layer];
 function loadDigit() {
   if (orderPos >= order.length) { passes++; order = shuffledOrder(data.train.n, seed * 1000 + passes); orderPos = 0; }
   const i = order[orderPos++];
-  cur = { i, input: image(data.train, i), label: data.train.labels[i], phase: 0 };
+  cur = { i, input: image(data.train, i), label: data.train.labels[i], phase: P.DIGIT };
 }
 function doForward() {
   const r = lossAndGrad(weights, cur.input, cur.label);
-  Object.assign(cur, { S: r.S, loss: r.loss, grads: r.grads, back: r.back, pred: argmax(r.S.prob), phase: 1 });
+  Object.assign(cur, { S: r.S, loss: r.loss, grads: r.grads, back: r.back, pred: argmax(r.S.prob), phase: P.FWD });
 }
-function doBackward() { collected.push(cur.grads); shown = collected.length === 1 ? cur.grads : averageGrads(collected); cur.phase = 2; }
+function doBackward() { collected.push(cur.grads); shown = collected.length === 1 ? cur.grads : averageGrads(collected); cur.phase = P.BFC; }
 function doUpdate() {
   if (collected.length >= batch) { prevWeights = weights; weights = sgdStep(weights, shown, lr); collected = []; cur.applied = true; }
   else cur.applied = false;
-  cur.phase = 3; digitsSeen++; record(cur);
+  cur.phase = P.UPD; digitsSeen++; record(cur);
 }
 function record(d) {
   lossRaw.push([digitsSeen, d.loss]); ema = ema == null ? d.loss : ema + 0.02 * (d.loss - ema); lossEma.push([digitsSeen, ema]);
@@ -225,18 +234,18 @@ function record(d) {
   if (MILESTONES.includes(digitsSeen)) snaps.push({ at: digitsSeen, bank: weights.bank.map((k) => k.slice()) });
 }
 function evalTest() { lastTest = accuracy(weights, data.test, testIdx); accTest.push([digitsSeen, lastTest]); }
-function advance() { // play: finish the digit on show, then take the next one up to its update, so the band always has a whole step to show
-  if (cur.phase === 0) doForward(); if (cur.phase === 1) doBackward(); if (cur.phase === 2) doUpdate();
-  loadDigit(); doForward(); doBackward();
+function finishDigit() { // run whatever phases the digit on show has left, through its update
+  if (cur.phase === P.DIGIT) doForward(); if (cur.phase === P.FWD) doBackward(); if (cur.phase < P.UPD) doUpdate();
+}
+function advance() { // play: finish the digit on show, then take the next one to the end of its backward pass, so the band always has a whole step to show
+  finishDigit(); loadDigit(); doForward(); doBackward(); cur.phase = P.BL1;
 }
 function step() {
-  if (cur.phase === 3) loadDigit(); else if (cur.phase === 0) doForward(); else if (cur.phase === 1) doBackward(); else { doUpdate(); if (cur.applied && !reduced) startAnim(); }
+  if (cur.phase === P.UPD) loadDigit(); else if (cur.phase === P.DIGIT) doForward(); else if (cur.phase === P.FWD) doBackward();
+  else if (cur.phase < P.BL1) cur.phase++; else { doUpdate(); if (cur.applied && !reduced) startAnim(); }
   renderAll();
 }
-function nextDigit() {
-  if (cur.phase === 0) doForward(); if (cur.phase === 1) doBackward(); if (cur.phase === 2) doUpdate();
-  loadDigit(); doForward(); renderAll();
-}
+function nextDigit() { finishDigit(); loadDigit(); doForward(); renderAll(); }
 function reset({ newSeed = false, layer1: l1 = 'random' } = {}) {
   if (newSeed) seed++; layer1 = l1;
   weights = initWeights({ seed, layer1 }); order = shuffledOrder(data.train.n, seed * 1000); orderPos = 0; passes = 0; digitsSeen = 0;
@@ -258,141 +267,226 @@ function frame(ts) {
 }
 function setPlaying(p) {
   playing = p; $('playBtn').textContent = p ? 'Pause' : 'Play';
-  if (p) { if (cur.phase === 0) doForward(); if (cur.phase === 1) doBackward(); // the digit on show goes straight to its backward pass
-    lastFrame = 0; carry = 0; anim = null; drawn = cur; renderAll(); requestAnimationFrame(frame); }
+  if (p) { finishBackward(); lastFrame = 0; carry = 0; anim = null; drawn = cur; renderAll(); requestAnimationFrame(frame); }
   else renderAll();
+}
+function finishBackward() { // the digit on show goes straight to the end of its backward pass
+  if (cur.phase === P.DIGIT) doForward(); if (cur.phase === P.FWD) doBackward(); if (cur.phase < P.BL1) cur.phase = P.BL1;
 }
 
 // ---------- update animation (weights fade from old to new over 300 ms) ----------
-function paintWeights() { if (rep === '3d') view3d.refresh(); else renderTrips(); }
+function paintWeights() { if (rep === '3d') view3d.refresh(); else renderNet(); }
 function startAnim() { anim = { t0: performance.now(), t: 0 }; const tick = () => { if (!anim) return; const t = (performance.now() - anim.t0) / 300; if (t >= 1) { anim = null; paintWeights(); return; } anim.t = t; paintWeights(); requestAnimationFrame(tick); }; requestAnimationFrame(tick); }
 function shownWeights() { // the weights to draw: interpolated during the animation
   if (!anim || !prevWeights) return weights; const t = anim.t; const mix = (a, b) => a + t * (b - a);
   return { bank: weights.bank.map((k, i) => k.map((w, q) => mix(prevWeights.bank[i][q], w))), l2: weights.l2.map((ks, i) => ks.map((k, s) => k.map((w, q) => mix(prevWeights.l2[i][s][q], w)))), W: weights.W.map((r, f) => r.map((w, c) => mix(prevWeights.W[f][c], w))), B: weights.B.map((w, c) => mix(prevWeights.B[c], w)) };
 }
+// the weights the gradient is applied to: before the update, the current ones; once applied, the ones it was applied to
+const wBefore = () => (cur.phase === P.UPD && cur.applied && prevWeights ? prevWeights : weights);
+// w′ for one array of a layer: the preview w − lr·∂L/∂w, or after the update the weights it produced
+const primeOf = (pick) => (cur.phase === P.UPD && cur.applied ? pick(weights) : pick(weights).map((v, q) => v - lr * pick(shown)[q]));
 
 // ---------- rendering helpers ----------
-const lit = (R, st, ch) => (R[st] && (R[st].chs === null || R[st].chs.has(ch)) ? R[st].rect : null);
 function hoverable(cv, make) {
   cv.addEventListener('pointermove', (ev) => { const p = cellAt(cv, ev); const np = p ? make(p) : null; if (JSON.stringify(np) !== JSON.stringify(probe)) { probe = np; renderAll(); } });
   cv.addEventListener('pointerleave', () => { if (probe) { probe = null; renderAll(); } });
 }
-function stage(title, sub, cols) { const d = document.createElement('div'); d.className = 'stage'; const t = document.createElement('div'); t.className = 't'; t.textContent = title; d.append(t); const s = document.createElement('div'); s.className = 'stack'; if (cols) s.style.gridTemplateColumns = `repeat(${cols},auto)`; d.append(s); if (sub) { const c = document.createElement('div'); c.textContent = sub; c.style.marginTop = '6px'; d.append(c); } return [d, s]; }
-function arrow(txt = '→', msg = false) { const a = document.createElement('div'); a.className = 'arrow' + (msg ? ' msg' : ''); a.textContent = txt; return a; }
 function canvas(w, h = w) { const cv = document.createElement('canvas'); cv.width = w; cv.height = h; cv.style.width = w + 'px'; cv.style.height = h + 'px'; return cv; }
-const isW = (layer) => probe && probe.kind === 'w' && probe.layer === layer;
-const gradShown = () => (cur.phase === 2 ? shown : null);
+const el = (tag, cls, text) => { const d = document.createElement(tag); if (cls) d.className = cls; if (text != null) d.textContent = text; return d; };
+const flatW = (M) => { const o = new Float32Array(C2 * NC); for (let f = 0; f < C2; f++) for (let c = 0; c < NC; c++) o[f * NC + c] = M[f][c]; return o; };
+const layerOf = (layer) => (layer === 'bank' ? 'l1' : layer === 'l2' ? 'l2' : 'fc');
 
+const PHASES = ['digit', 'forward', 'back: FC', 'back: layer 2', 'back: layer 1', 'update'];
+const STEP_LABEL = ['Step: forward', 'Step: backward from the loss, through FC', 'Step: backward through layer 2', 'Step: backward through layer 1', 'Step: update', 'Step: load the next digit'];
 function renderPhase() {
   $('phase').querySelectorAll('b').forEach((b) => { const p = +b.dataset.p; b.classList.toggle('done', p <= cur.phase); b.classList.toggle('next', p === cur.phase + 1); });
-  $('digitInfo').textContent = `training digit ${cur.i} · label ${cur.label}` + (cur.phase >= 1 ? ` · guess ${cur.pred} ${cur.pred === cur.label ? '✓' : '✗'}` : '') + (batch > 1 ? ` · batch ${collected.length}/${batch} collected` : '');
-  $('stepBtn').textContent = cur.phase === 3 ? 'Step: load the next digit' : cur.phase === 0 ? 'Step: forward' : cur.phase === 1 ? 'Step: backward' : 'Step: update';
+  $('digitInfo').textContent = `training digit ${cur.i} · label ${cur.label}` + (cur.phase >= P.FWD ? ` · guess ${cur.pred} ${cur.pred === cur.label ? '✓' : '✗'}` : '') + (batch > 1 ? ` · batch ${collected.length}/${batch} collected` : '');
+  $('stepBtn').textContent = STEP_LABEL[cur.phase];
 }
 
-function renderForward() {
-  const pipe = $('fwd'); pipe.innerHTML = '';
-  const R = probe && probe.kind === 'map' && cur.S ? footprint({ stage: probe.stage, rect: [probe.r, probe.r, probe.c, probe.c], ch: probe.ch }, cur.S) : {};
-  { const [d, s] = stage('digit', `label ${cur.label}`); const cv = canvas(96); drawGrid(cv, cur.input, N, N, { rect: R.input && R.input.rect, outline: isW('bank') }); s.append(cv); pipe.append(d); }
-  if (cur.phase < 1) { pipe.append(arrow('→  Step runs the forward pass', true)); return; }
-  const S = cur.S; pipe.append(arrow());
-  const mapsCol = (title, maps, n, st, sub, cols, px, srcOf) => { const [d, s] = stage(title, sub, cols); const sc = Math.max(...maps.map(maxAbs));
-    maps.forEach((m, idx) => { const cv = canvas(px); drawGrid(cv, m, n, n, { mode: 'div', scale: sc, rect: lit(R, st, idx), outline: !!(srcOf && srcOf(idx)) }); hoverable(cv, ([r, c]) => ({ kind: 'map', stage: st, r, c, ch: idx })); s.append(cv); }); return d; };
-  pipe.append(mapsCol('conv 1 + ReLU', S.a1, S.O, 'conv1', `4 maps ${S.O}×${S.O}`, 2, 56), arrow());
-  pipe.append(mapsCol('pool 1', S.p1, S.Q, 'pool1', `4 maps ${S.Q}×${S.Q}`, 2, 40, (i) => isW('l2') && probe.s === i), arrow());
-  pipe.append(mapsCol('conv 2 + ReLU', S.a2, S.Q, 'conv2', `8 maps ${S.Q}×${S.Q}`, 4, 40), arrow());
-  pipe.append(mapsCol('pool 2', S.p2, S.Q2, 'pool2', `8 maps ${S.Q2}×${S.Q2}`, 4, 32, (i) => probe && probe.kind === 'gap' && probe.f === i), arrow());
-  { const [d, s] = stage('global average', 'vector of 8'); const cv = canvas(36, 8 * 36);
-    const f = probe && (probe.kind === 'gap' || isW('W')) ? probe.f : null;
-    drawGrid(cv, S.gap, 1, C2, { mode: 'div', scale: maxAbs(S.gap), labels: true, rect: f != null ? [f, f, 0, 0] : probe && (probe.kind === 'bar' || isW('B')) ? [0, C2 - 1, 0, 0] : null });
-    hoverable(cv, ([r]) => ({ kind: 'gap', f: r })); s.append(cv); pipe.append(d, arrow()); }
-  { const [d, s] = stage('FC weights', '8 × 10, plus 10 biases'); const w = shownWeights(); const flat = new Float32Array(C2 * NC); for (let f = 0; f < C2; f++) for (let c = 0; c < NC; c++) flat[f * NC + c] = w.W[f][c];
-    const cv = canvas(NC * 20, C2 * 20);
-    const rect = isW('W') ? [probe.f, probe.f, probe.c, probe.c] : probe && (probe.kind === 'bar' || isW('B')) ? [0, C2 - 1, probe.c, probe.c] : probe && probe.kind === 'gap' ? [probe.f, probe.f, 0, NC - 1] : null;
-    drawGrid(cv, flat, NC, C2, { mode: 'div', scale: maxAbs(flat), rect }); hoverable(cv, ([f, c]) => ({ kind: 'w', layer: 'W', f, c })); s.append(cv); pipe.append(d, arrow()); }
-  { const [d, s] = stage('scores → softmax', `loss = −log p[${cur.label}] = ${fmt(cur.loss)}`); s.append(bars(S.prob, cur.label, cur.pred)); pipe.append(d); }
+// ---------- 2D: the whole network on one line ----------
+// Columns follow the data, left to right, and each layer's weights sit between the map they read and the map they
+// make. Rows: forward (activations and the weights w), backward (the gradient of each, under it), update (w′ under
+// each weight). Channel k runs as one horizontal line through its kernel, its maps, its average and its row of FC
+// weights. Cells keep their place in every phase; what is not computed yet is drawn faint.
+const STACK = 288;                       // height of a channel stack, px
+const COLS = [
+  { id: 'in', t: 'digit', s: '16×16', n: 1 },
+  { id: 'k1', t: 'layer-1 kernels', s: '4 × 3×3', n: C1, w: true, layer: 'l1' },
+  { id: 'conv1', t: 'conv 1 + ReLU', s: '4 × 16×16', n: C1, layer: 'l1' },
+  { id: 'pool1', t: 'pool 1', s: '4 × 8×8', n: C1, layer: 'l2' },
+  { id: 'k2', t: 'layer-2 kernels', s: '8 × 3×3×4', n: C2, w: true, layer: 'l2' },
+  { id: 'conv2', t: 'conv 2 + ReLU', s: '8 × 8×8', n: C2, layer: 'l2' },
+  { id: 'pool2', t: 'pool 2', s: '8 × 4×4', n: C2, layer: 'l2' },
+  { id: 'gap', t: 'global average', s: '8 values', n: C2, layer: 'fc' },
+  { id: 'fc', t: 'FC weights', s: '8 × 10, + biases', n: C2, w: true, layer: 'fc' },
+  { id: 'out', t: 'scores → softmax', s: '10 classes', n: 1, layer: 'fc' },
+];
+// between consecutive columns: the forward operation, the backward arrow, and what the operation is
+const OPS = [['⋆', '', 'convolved with each kernel'], ['=', '←', 'one map per kernel, then ReLU'], ['→', '←', '2×2 max pool'], ['⋆', '←', 'convolved with each kernel'],
+  ['=', '←', 'one map per kernel, then ReLU'], ['→', '←', '2×2 max pool'], ['→', '←', 'average of each map'], ['·', '←', 'times W, plus b'], ['=', '←', 'scores, then softmax']];
+const blank = (n) => new Float32Array(n);
+const frontLayer = () => (!playing && cur.phase >= P.BFC && cur.phase < P.UPD ? Object.keys(REVEAL).find((k) => REVEAL[k] === cur.phase) : null);
+
+function renderNet() {
+  const net = $('net'); net.innerHTML = '';
+  const S = cur.S, Bk = cur.back, ph = cur.phase, w = shownWeights(), g = shown, M = marks(probe), fl = frontLayer();
+  const fwdOn = ph >= P.FWD;
+  const place = (node, col, row) => { node.style.gridColumn = String(col); node.style.gridRow = String(row); net.append(node); return node; };
+  const colAt = (i) => 2 + 2 * i;
+  const draw = (host, row, col, idx, data, cols, rows, px, opts, make) => { // one grid, with this render's highlight and its hover probe
+    const cv = canvas(cols * px, rows * px); const k = `${row}:${col}:${idx}`;
+    drawGrid(cv, data, cols, rows, { ...opts, rect: M.rect.get(k) || null, outline: M.out.has(k) });
+    if (make) hoverable(cv, make); host.append(cv); return cv; };
+  const slots = (host, n, pitch, top = 0) => { const s = el('div', 'slots'); s.style.gridAutoRows = pitch + 'px'; if (top) s.style.paddingTop = top + 'px'; host.append(s); return Array.from({ length: n }, () => { const d = el('div'); s.append(d); return d; }); };
+  const ab = (arrs) => Math.max(...arrs.map(maxAbs));
+  // scales: activations per stage, weights and their updates per layer, gradients per layer
+  const sB = ab(w.bank), sL = Math.max(...w.l2.flat().map(maxAbs)), sW = maxAbs(flatW(w.W)), sb = Math.max(maxAbs(w.B), revealed('fc') ? maxAbs(primeOf((W) => W.B)) : 0);
+  const gB = g ? ab(g.bank) : 1, gL = g ? Math.max(...g.l2.flat().map(maxAbs)) : 1, gW = g ? maxAbs(flatW(g.W)) : 1, gb = g ? maxAbs(g.B) : 1;
+
+  [['forward', 2], ['backward', 3], ['update', 4]].forEach(([t, r]) => place(el('div', 'rowlab', t), 1, r));
+  COLS.forEach((C, i) => {
+    const col = colAt(i);
+    const hd = el('div', 'hd' + (C.w ? ' w' : '')); hd.append(el('b', null, C.t), el('span', null, C.s)); place(hd, col, 1);
+    const cell = (row, pending, extra = '') => place(el('div', 'cell' + (C.w ? ' w' : '') + (pending ? ' pending' : '') + extra), col, row);
+    const isFront = fl && C.layer === fl;
+    // ---- forward row
+    { const host = cell(2, !fwdOn && !C.w && C.id !== 'in');
+      if (C.id === 'in') draw(slots(host, 1, STACK)[0], 'f', 'in', 0, cur.input, N, N, 7, {}, ([r, c]) => ({ kind: 'pixel', r, c }));
+      if (C.id === 'k1') slots(host, C1, STACK / C1).forEach((s, k) => draw(s, 'f', 'k1', k, w.bank[k], 3, 3, 14, { mode: 'div', scale: sB }, ([a, b]) => ({ kind: 'w', layer: 'bank', k, q: a * 3 + b })));
+      if (C.id === 'conv1' || C.id === 'pool1') { const n = C.id === 'conv1' ? O1 : Q1, maps = fwdOn ? (C.id === 'conv1' ? S.a1 : S.p1) : null, sc = maps ? ab(maps) : 1;
+        slots(host, C1, STACK / C1).forEach((s, k) => draw(s, 'f', C.id, k, maps ? maps[k] : blank(n * n), n, n, C.id === 'conv1' ? 4 : 6, { mode: 'div', scale: sc }, maps && (([r, c]) => ({ kind: 'map', stage: C.id, r, c, ch: k })))); }
+      if (C.id === 'k2') slots(host, C2, STACK / C2).forEach((s, k) => { const rowEl = el('div', 'kern'); s.append(rowEl);
+        for (let sl = 0; sl < C1; sl++) draw(rowEl, 'f', 'k2', `${k}.${sl}`, w.l2[k][sl], 3, 3, 9, { mode: 'div', scale: sL }, ([a, b]) => ({ kind: 'w', layer: 'l2', k, s: sl, q: a * 3 + b })); });
+      if (C.id === 'conv2' || C.id === 'pool2') { const n = C.id === 'conv2' ? Q1 : Q2, maps = fwdOn ? (C.id === 'conv2' ? S.a2 : S.p2) : null, sc = maps ? ab(maps) : 1;
+        slots(host, C2, STACK / C2).forEach((s, k) => draw(s, 'f', C.id, k, maps ? maps[k] : blank(n * n), n, n, C.id === 'conv2' ? 4 : 8, { mode: 'div', scale: sc }, maps && (([r, c]) => ({ kind: 'map', stage: C.id, r, c, ch: k })))); }
+      if (C.id === 'gap') slots(host, C2, STACK / C2).forEach((s, f) => draw(s, 'f', 'gap', f, [fwdOn ? S.gap[f] : 0], 1, 1, 30, { mode: 'div', scale: fwdOn ? maxAbs(S.gap) : 1, labels: fwdOn }, fwdOn && (() => ({ kind: 'gap', f }))));
+      if (C.id === 'fc') { const ss = slots(host, C2 + 1, STACK / C2);
+        for (let f = 0; f < C2; f++) draw(ss[f], 'f', 'fc', f, w.W[f], NC, 1, 22, { mode: 'div', scale: sW }, ([, c]) => ({ kind: 'w', layer: 'W', f, c }));
+        const brow = el('div', 'brow'); brow.append(el('span', 'tag', '+ b')); ss[C2].append(brow); draw(brow, 'f', 'fc', 'b', w.B, NC, 1, 22, { mode: 'div', scale: sb }, ([, c]) => ({ kind: 'w', layer: 'B', c })); }
+      if (C.id === 'out') { const s = slots(host, 1, STACK)[0];
+        if (fwdOn) { const box = el('div', 'outbox'); box.append(bars(S.prob, cur.label, cur.pred, M.bars), el('div', 'loss', `loss = −log p[${cur.label}] = ${fmt(cur.loss)}`)); s.append(box); }
+        else s.append(el('div', 'hint', 'after the forward pass')); }
+    }
+    // ---- backward row
+    { const on = C.layer && revealed(C.layer), host = cell(3, C.layer && !on, on && isFront ? ' front' : '');
+      if (C.id === 'in') host.classList.add('empty');
+      if (C.id === 'k1') slots(host, C1, STACK / C1).forEach((s, k) => draw(s, 'b', 'k1', k, on ? g.bank[k] : blank(9), 3, 3, 14, { mode: 'div', scale: gB }, on && (([a, b]) => ({ kind: 'w', layer: 'bank', k, q: a * 3 + b }))));
+      if (['conv1', 'pool1', 'conv2', 'pool2'].includes(C.id)) { const n = C.id === 'conv1' ? O1 : C.id === 'pool2' ? Q2 : Q1, px = { conv1: 4, pool1: 6, conv2: 4, pool2: 8 }[C.id], maps = on ? Bk[C.id] : null, sc = maps ? ab(maps) : 1;
+        slots(host, C.n, STACK / C.n).forEach((s, k) => draw(s, 'b', C.id, k, maps ? maps[k] : blank(n * n), n, n, px, { mode: 'div', scale: sc }, maps && (([r, c]) => ({ kind: 'back', stage: C.id, r, c, ch: k })))); }
+      if (C.id === 'k2') slots(host, C2, STACK / C2).forEach((s, k) => { const rowEl = el('div', 'kern'); s.append(rowEl);
+        for (let sl = 0; sl < C1; sl++) draw(rowEl, 'b', 'k2', `${k}.${sl}`, on ? g.l2[k][sl] : blank(9), 3, 3, 9, { mode: 'div', scale: gL }, on && (([a, b]) => ({ kind: 'w', layer: 'l2', k, s: sl, q: a * 3 + b }))); });
+      if (C.id === 'gap') slots(host, C2, STACK / C2).forEach((s, f) => draw(s, 'b', 'gap', f, [on ? Bk.gap[f] : 0], 1, 1, 30, { mode: 'div', scale: on ? maxAbs(Bk.gap) : 1, labels: on }, on && (() => ({ kind: 'back', stage: 'gap', ch: f }))));
+      if (C.id === 'fc') { const ss = slots(host, C2 + 1, STACK / C2);
+        for (let f = 0; f < C2; f++) draw(ss[f], 'b', 'fc', f, on ? g.W[f] : blank(NC), NC, 1, 22, { mode: 'div', scale: gW }, on && (([, c]) => ({ kind: 'w', layer: 'W', f, c })));
+        const brow = el('div', 'brow'); brow.append(el('span', 'tag', '∂b')); ss[C2].append(brow); draw(brow, 'b', 'fc', 'b', on ? g.B : blank(NC), NC, 1, 22, { mode: 'div', scale: gb }, on && (([, c]) => ({ kind: 'w', layer: 'B', c }))); }
+      if (C.id === 'out') { const ss = slots(host, NC, 24, (STACK - NC * 24) / 2);
+        ss.forEach((s, c) => { const r = el('div', 'pyrow'); s.append(r); draw(r, 'b', 'out', c, [on ? Bk.scores[c] : 0], 1, 1, 22, { mode: 'div', scale: 1, labels: false }, on && (() => ({ kind: 'back', stage: 'scores', c }))); r.append(el('span', 'tag', on ? fmt(Bk.scores[c]) : '')); });
+        host.append(el('div', 'loss', 'p − y')); }
+    }
+    // ---- update row: w′ under each weight
+    if (C.w) { const on = revealed(C.layer), host = cell(4, !on, on && isFront ? ' front' : '');
+      if (C.id === 'k1') slots(host, C1, STACK / C1).forEach((s, k) => draw(s, 'u', 'k1', k, on ? primeOf((W) => W.bank[k]) : blank(9), 3, 3, 14, { mode: 'div', scale: sB }, on && (([a, b]) => ({ kind: 'w', layer: 'bank', k, q: a * 3 + b }))));
+      if (C.id === 'k2') slots(host, C2, STACK / C2).forEach((s, k) => { const rowEl = el('div', 'kern'); s.append(rowEl);
+        for (let sl = 0; sl < C1; sl++) draw(rowEl, 'u', 'k2', `${k}.${sl}`, on ? primeOf((W) => W.l2[k][sl]) : blank(9), 3, 3, 9, { mode: 'div', scale: sL }, on && (([a, b]) => ({ kind: 'w', layer: 'l2', k, s: sl, q: a * 3 + b }))); });
+      if (C.id === 'fc') { const ss = slots(host, C2 + 1, STACK / C2);
+        for (let f = 0; f < C2; f++) draw(ss[f], 'u', 'fc', f, on ? primeOf((W) => W.W[f]) : blank(NC), NC, 1, 22, { mode: 'div', scale: sW }, on && (([, c]) => ({ kind: 'w', layer: 'W', f, c })));
+        const brow = el('div', 'brow'); brow.append(el('span', 'tag', '+ b′')); ss[C2].append(brow); draw(brow, 'u', 'fc', 'b', on ? primeOf((W) => W.B) : blank(NC), NC, 1, 22, { mode: 'div', scale: sb }, on && (([, c]) => ({ kind: 'w', layer: 'B', c }))); }
+    }
+    // ---- the operation to the next column, and the backward arrow into this one
+    if (i < OPS.length) { const [f, b, what] = OPS[i];
+      const of = place(el('div', 'op', f), col + 1, 2); of.title = what;
+      const ob = place(el('div', 'op back' + (fl && C.layer === fl ? ' on' : '') + (C.layer && revealed(C.layer) ? ' done' : ''), b), col + 1, 3); ob.title = b ? 'the gradient flows right to left' : ''; }
+  });
 }
-function bars(prob, label, top) {
-  const el = document.createElement('div'); el.className = 'bars';
+function bars(prob, label, top, hov) {
+  const box = el('div', 'bars');
   for (let c = 0; c < NC; c++) {
-    const lab = document.createElement('div'); lab.className = 'lab'; lab.textContent = `class ${c}${c === label ? ' (true)' : ''}`;
-    const hov = probe && ((probe.kind === 'bar' && probe.c === c) || ((isW('W') || isW('B')) && probe.c === c));
-    const bar = document.createElement('div'); bar.className = 'bar' + (c === top ? ' top' : '') + (c === label ? ' true' : '') + (hov ? ' hov' : '');
-    const i = document.createElement('i'); i.style.width = (prob[c] * 100) + '%'; bar.append(i);
-    const v = document.createElement('div'); v.className = 'v'; v.textContent = (prob[c] * 100).toFixed(1) + '%';
+    const lab = el('div', 'lab', `class ${c}${c === label ? ' (true)' : ''}`);
+    const bar = el('div', 'bar' + (c === top ? ' top' : '') + (c === label ? ' true' : '') + (hov.has(c) ? ' hov' : ''));
+    const i = el('i'); i.style.width = (prob[c] * 100) + '%'; bar.append(i);
+    const v = el('div', 'v', (prob[c] * 100).toFixed(1) + '%');
     [lab, bar, v].forEach((x) => x.addEventListener('pointerenter', () => { if (!(probe && probe.kind === 'bar' && probe.c === c)) { probe = { kind: 'bar', c }; renderAll(); } }));
-    el.append(lab, bar, v);
+    box.append(lab, bar, v);
   }
-  el.addEventListener('pointerleave', () => { probe = null; renderAll(); });
-  return el;
+  box.addEventListener('pointerleave', () => { probe = null; renderAll(); });
+  return box;
 }
 
-function renderBackward() {
-  const pipe = $('bwd'); pipe.innerHTML = '';
-  if (cur.phase < 2) { pipe.append(arrow(cur.phase < 1 ? 'after the forward pass' : '←  Step runs the backward pass', true)); return; }
-  const B = cur.back, S = cur.S; const isSrc = (layer, idx) => isW(layer) && probe.k === idx;
-  const mapsCol = (title, maps, n, st, sub, cols, px, srcOf) => { const [d, s] = stage(title, sub, cols); const sc = Math.max(...maps.map(maxAbs));
-    maps.forEach((m, idx) => { const cv = canvas(px); const own = probe && probe.kind === 'back' && probe.stage === st && probe.ch === idx;
-      drawGrid(cv, m, n, n, { mode: 'div', scale: sc, outline: !!(srcOf && srcOf(idx)), rect: own ? [probe.r, probe.r, probe.c, probe.c] : null }); hoverable(cv, ([r, c]) => ({ kind: 'back', stage: st, r, c, ch: idx })); s.append(cv); }); return d; };
-  pipe.append(mapsCol('∂L/∂conv 1', B.conv1, S.O, 'conv1', 'gated by ReLU', 2, 56, (i) => isSrc('bank', i)), arrow('←'));
-  pipe.append(mapsCol('∂L/∂pool 1', B.pool1, S.Q, 'pool1', 'summed over 8 kernels', 2, 40), arrow('←'));
-  pipe.append(mapsCol('∂L/∂conv 2', B.conv2, S.Q, 'conv2', 'gated by ReLU', 4, 40, (i) => isSrc('l2', i)), arrow('←'));
-  pipe.append(mapsCol('∂L/∂pool 2', B.pool2, S.Q2, 'pool2', 'through the max of each 2×2', 4, 32), arrow('←'));
-  { const [d, s] = stage('∂L/∂gap', 'a 16th to each cell'); const cv = canvas(36, 8 * 36); drawGrid(cv, B.gap, 1, C2, { mode: 'div', scale: maxAbs(B.gap), labels: true, rect: probe && probe.kind === 'gap' ? [probe.f, probe.f, 0, 0] : null }); hoverable(cv, ([r]) => ({ kind: 'gap', f: r })); s.append(cv); pipe.append(d, arrow('←')); }
-  { const [d, s] = stage('∂L/∂scores = p − y', 'where the backward pass starts'); const cv = canvas(NC * 30, 30);
-    const c = probe && (probe.kind === 'bar' || isW('W') || isW('B')) ? probe.c : null;
-    drawGrid(cv, B.scores, NC, 1, { mode: 'div', scale: 1, labels: true, rect: c != null ? [0, 0, c, c] : null }); hoverable(cv, ([, c]) => ({ kind: 'bar', c }));
-    const lab = document.createElement('div'); lab.className = 'cap'; lab.textContent = 'classes 0 to 9'; s.append(cv, lab); pipe.append(d); }
+// What a hovered value is computed from, as highlights keyed "row:column:index" (rows f, b, u; index a channel,
+// "k.s" for a layer-2 slice, a row of W or "b"). rect: a cell range on that grid; out: the whole grid outlined.
+function marks(p) {
+  const M = { rect: new Map(), out: new Set(), bars: new Set() };
+  if (!p || !cur.S) return M;
+  const S = cur.S, R = (row, col, idx, rect) => M.rect.set(`${row}:${col}:${idx}`, rect), O = (row, col, idx) => M.out.add(`${row}:${col}:${idx}`);
+  const nOf = (st) => (st === 'conv1' || st === 'pool1' ? C1 : C2);
+  if (p.kind === 'pixel') R('f', 'in', 0, [p.r, p.r, p.c, p.c]);
+  if (p.kind === 'map') { // its receptive field, upstream, and the kernel that made it
+    const F = footprint({ stage: p.stage, rect: [p.r, p.r, p.c, p.c], ch: p.ch }, S);
+    for (const st of ['input', 'conv1', 'pool1', 'conv2', 'pool2']) { const h = F[st]; if (!h) continue;
+      if (st === 'input') R('f', 'in', 0, h.rect); else for (let ch = 0; ch < nOf(st); ch++) if (h.chs === null || h.chs.has(ch)) R('f', st, ch, h.rect); }
+    if (p.stage === 'conv1' || p.stage === 'pool1') O('f', 'k1', p.ch);
+    else for (let s = 0; s < C1; s++) O('f', 'k2', `${p.ch}.${s}`);
+  }
+  if (p.kind === 'back') { // the later gradients it was computed from, downstream, and the weights the error came through
+    const F = gradFootprint(p.stage === 'scores' ? { stage: 'scores', c: p.c } : { stage: p.stage, r: p.r, c: p.c, ch: p.ch }, S);
+    for (const st of ['conv1', 'pool1', 'conv2', 'pool2']) { const h = F[st]; if (!h) continue; for (let ch = 0; ch < nOf(st); ch++) if (h.chs === null || h.chs.has(ch)) R('b', st, ch, h.rect); }
+    if (F.gap) for (let f = 0; f < C2; f++) if (F.gap.chs === null || F.gap.chs.has(f)) { R('b', 'gap', f, [0, 0, 0, 0]); if (p.stage !== 'gap' || f === p.ch) O('f', 'fc', f); }
+    if (F.scores) for (let c = F.scores.rect[2]; c <= F.scores.rect[3]; c++) R('b', 'out', c, [0, 0, 0, 0]);
+    if (p.stage === 'conv1' || p.stage === 'pool1') { const s = [...F.pool1.chs][0]; for (let k = 0; k < C2; k++) O('f', 'k2', `${k}.${s}`); }
+    if (p.stage === 'scores') M.bars.add(p.c);
+  }
+  if (p.kind === 'gap') { O('f', 'pool2', p.f); R('f', 'gap', p.f, [0, 0, 0, 0]); R('f', 'fc', p.f, [0, 0, 0, NC - 1]); }
+  if (p.kind === 'bar') { for (let f = 0; f < C2; f++) { R('f', 'gap', f, [0, 0, 0, 0]); R('f', 'fc', f, [0, 0, p.c, p.c]); } R('f', 'fc', 'b', [0, 0, p.c, p.c]); M.bars.add(p.c); }
+  if (p.kind === 'w') { // the weight in its three rows, and the two maps whose product is its gradient
+    const rows = ['f', 'b', 'u'];
+    if (p.layer === 'bank') { const a = Math.floor(p.q / 3), b = p.q % 3; rows.forEach((r) => R(r, 'k1', p.k, [a, a, b, b])); O('f', 'in', 0); O('b', 'conv1', p.k); }
+    if (p.layer === 'l2') { const a = Math.floor(p.q / 3), b = p.q % 3; rows.forEach((r) => R(r, 'k2', `${p.k}.${p.s}`, [a, a, b, b])); O('f', 'pool1', p.s); O('b', 'conv2', p.k); }
+    if (p.layer === 'W') { rows.forEach((r) => R(r, 'fc', p.f, [0, 0, p.c, p.c])); R('f', 'gap', p.f, [0, 0, 0, 0]); R('b', 'out', p.c, [0, 0, 0, 0]); M.bars.add(p.c); }
+    if (p.layer === 'B') { rows.forEach((r) => R(r, 'fc', 'b', [0, 0, p.c, p.c])); R('b', 'out', p.c, [0, 0, 0, 0]); M.bars.add(p.c); }
+  }
+  return M;
 }
 
-function renderTrips() {
-  const el = $('trips'); el.innerHTML = '';
-  const g = gradShown(), w = shownWeights();
-  const group = (title) => { const d = document.createElement('div'); d.className = 'trip'; const t = document.createElement('div'); t.className = 't'; t.textContent = title; d.append(t); const gr = document.createElement('div'); gr.className = 'g'; d.append(gr); el.append(d); return gr; };
-  const cell = (gr, label, data, cols, rows, scale, px, make, hl) => { const wrap = document.createElement('div'); const cv = canvas(cols * px, rows * px); drawGrid(cv, data, cols, rows, { mode: 'div', scale, labels: px >= 22, rect: hl }); hoverable(cv, make); const s = document.createElement('span'); s.textContent = label; wrap.append(cv, s); gr.append(wrap); };
-  const triplet = (gr, wData, gData, cols, rows, px, make, hl, sw, sg) => { cell(gr, 'w', wData, cols, rows, sw, px, make, hl); if (g) { cell(gr, '∂L/∂w', gData, cols, rows, sg, px, make, hl); cell(gr, 'w′', wData.map((v, q) => v - lr * gData[q]), cols, rows, sw, px, make, hl); } };
-  // layer 1: four 3×3 kernels
-  const sB = Math.max(...w.bank.map(maxAbs)), gB = g ? Math.max(...g.bank.map(maxAbs)) : 1;
-  w.bank.forEach((k, i) => { const hl = isW('bank') && probe.k === i ? [Math.floor(probe.q / 3), Math.floor(probe.q / 3), probe.q % 3, probe.q % 3] : null;
-    triplet(group(`layer 1, kernel ${i + 1}`), k, g && g.bank[i], 3, 3, 24, ([a, b]) => ({ kind: 'w', layer: 'bank', k: i, q: a * 3 + b }), hl, sB, gB); });
-  // layer 2: each kernel as its four 3×3 slices side by side (12 × 3 cells)
-  const flat2 = (ks) => { const out = new Float32Array(12 * 3); ks.forEach((k, s) => { for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) out[a * 12 + s * 3 + b] = k[a * 3 + b]; }); return out; };
-  const sL = Math.max(...w.l2.flat().map(maxAbs)), gL = g ? Math.max(...g.l2.flat().map(maxAbs)) : 1;
-  w.l2.forEach((ks, i) => { const hl = isW('l2') && probe.k === i ? [Math.floor(probe.q / 3), Math.floor(probe.q / 3), probe.s * 3 + probe.q % 3, probe.s * 3 + probe.q % 3] : null;
-    triplet(group(`layer 2, kernel ${i + 1} (4 slices)`), flat2(ks), g && flat2(g.l2[i]), 12, 3, 12, ([a, col]) => ({ kind: 'w', layer: 'l2', k: i, s: Math.floor(col / 3), q: a * 3 + col % 3 }), hl, sL, gL); });
-  // FC: W as 10 × 8, B as 10 × 1
-  const flatW = (M) => { const out = new Float32Array(C2 * NC); for (let f = 0; f < C2; f++) for (let c = 0; c < NC; c++) out[f * NC + c] = M[f][c]; return out; };
-  const sW = maxAbs(flatW(w.W)), gW = g ? maxAbs(flatW(g.W)) : 1;
-  triplet(group('FC weights W (rows: averages, cols: classes)'), flatW(w.W), g && flatW(g.W), NC, C2, 14, ([f, c]) => ({ kind: 'w', layer: 'W', f, c }), isW('W') ? [probe.f, probe.f, probe.c, probe.c] : null, sW, gW);
-  triplet(group('FC biases b'), Float32Array.from(w.B), g && Float32Array.from(g.B), NC, 1, 14, ([, c]) => ({ kind: 'w', layer: 'B', c }), isW('B') ? [0, 0, probe.c, probe.c] : null, maxAbs(w.B), g ? maxAbs(g.B) : 1);
-}
-
+const PHASE_TEXT = [
+  () => 'A digit is loaded. Step runs the forward pass.',
+  () => `Forward done: the network says ${cur.pred}, the label is ${cur.label}. loss = −log p[${cur.label}] = −log ${fmt(cur.S.prob[cur.label])} = <span class="sum">${fmt(cur.loss)}</span>. Step starts the backward pass at the loss.`,
+  () => `<b>Backward, through the FC layer.</b> It starts at the loss: ∂L/∂scores = p − y, positive for the classes the network rated too high, negative for the true one. The FC weights get their gradient, average × (p − y), and the biases p − y. The error passes back to the eight averages through the same weights: ∂L/∂gap = W·(p − y). Green: what this step computed.`,
+  () => `<b>Backward, through layer 2.</b> Each average's gradient is spread as a 16th over its pool-2 map, routed to the cell that won each 2×2 maximum, and stopped where ReLU was off: that is ∂L/∂conv 2. Each layer-2 kernel's gradient sums, over every position, the pool-1 patch it read times ∂L/∂conv 2 there. The error then passes back to pool 1 through the same kernels.`,
+  () => `<b>Backward, through layer 1.</b> The same way: routed through pool 1's maxima and conv 1's ReLU to ∂L/∂conv 1, and each layer-1 kernel's gradient sums the digit's 3×3 patch times ∂L/∂conv 1 at every position. Every weight now has its gradient${batch > 1 && collected.length > 1 ? ` (averaged over ${collected.length} digits so far)` : ''}. Step applies w′ = w − ${fmt(lr)}·∂L/∂w to all ${4 * 9 + 8 * 4 * 9 + 8 * 10 + 10} weights at once.`,
+  () => (cur.applied ? 'Updated: the weights moved to w′, in the forward row. Step loads the next digit.' : `Gradient collected (batch ${collected.length}/${batch}); the weights move when the batch is complete. Step loads the next digit.`),
+];
 function readout() {
-  const ro = $('readout'); const p = probe, S = cur.S, g = gradShown();
+  const ro = $('readout'); const p = probe, S = cur.S;
+  const w0 = wBefore(), gOf = (layer) => (revealed(layer) ? shown : null);
   const upd = (wv, gv) => `w′ = w − lr·∂L/∂w = ${fmt(wv)} − ${fmt(lr)}×${fmt(gv)} = <span class="sum">${fmt(wv - lr * gv)}</span>`;
   const avgNote = batch > 1 && collected.length > 1 ? ` (gradient averaged over ${collected.length} digits so far)` : '';
-  if (!p && playing) { ro.innerHTML = `Playing. The band shows each digit after its backward pass, with the update it is about to get${speed > 10 ? `: about one digit in ${Math.round(speed / 10)} at ${speed} a second` : ''}. Hover any cell or weight to follow its value from digit to digit; pause to step through the digit on show.`; return; }
-  if (!p) {
-    ro.innerHTML = cur.phase === 0 ? 'A digit is loaded. Step runs the forward pass.'
-      : cur.phase === 1 ? `Forward done: the network says ${cur.pred}, the label is ${cur.label}. loss = −log p[${cur.label}] = −log ${fmt(S.prob[cur.label])} = <span class="sum">${fmt(cur.loss)}</span>. Step runs the backward pass.`
-      : cur.phase === 2 ? `Backward done: every weight has its gradient${avgNote}. Step applies w′ = w − ${fmt(lr)}·∂L/∂w to all ${4 * 9 + 8 * 4 * 9 + 8 * 10 + 10} weights at once.`
-      : cur.applied ? 'Updated: the weights moved. Step loads the next digit.' : `Gradient collected (batch ${collected.length}/${batch}); the weights move when the batch is complete. Step loads the next digit.`;
-    return;
-  }
+  if (!p && playing) { ro.innerHTML = `Playing. The band shows each digit at the end of its backward pass, with the update it is about to get${speed > 10 ? `: about one digit in ${Math.round(speed / 10)} at ${speed} a second` : ''}. Hover any cell or weight to follow its value from digit to digit; pause to step through the digit on show.`; return; }
+  if (!p) { ro.innerHTML = PHASE_TEXT[cur.phase](); return; }
+  const gapText = (f) => `<b>global average ${f + 1}</b> = mean of pool-2 map ${f + 1} = ${fmt(S.gap[f])}` + (revealed('fc') ? `. ∂L/∂gap[${f + 1}] = Σ_c W[${f + 1},c]·(p[c] − y[c]) = <span class="sum">${fmt(cur.back.gap[f])}</span>: the error of every class, through row ${f + 1} of W (green), spread as a 16th to each cell of the map.` : '.');
+  const barText = (c) => { const y = c === cur.label ? 1 : 0; return `<b>class ${c}</b>${y ? ' (the true class)' : ''}: p = ${fmt(S.prob[c])}` + (revealed('fc') ? `. ∂L/∂score[${c}] = p − y = ${fmt(S.prob[c])} − ${y} = <span class="sum">${fmt(S.prob[c] - y)}</span>: where the backward pass starts` : '') + '.'; };
   if (p.kind === 'pixel') { ro.innerHTML = `<b>input</b> pixel (${p.r}, ${p.c}) = ${fmt(cur.input[p.r * N + p.c])}.`; return; }
   if (p.kind === 'map') { const name = p.stage.replace(/([0-9])/, ' $1'); const maps = { conv1: S.a1, pool1: S.p1, conv2: S.a2, pool2: S.p2 }[p.stage]; const n = p.stage === 'conv1' ? S.O : p.stage === 'pool2' ? S.Q2 : S.Q;
-    const R = footprint({ stage: p.stage, rect: [p.r, p.r, p.c, p.c], ch: p.ch }, S); const [r0, r1, c0, c1] = R.input.rect;
-    ro.innerHTML = `<b>${name} map ${p.ch + 1}</b> cell (${p.r}, ${p.c}) = ${fmt(maps[p.ch][p.r * n + p.c])}. Sees input rows ${r0}–${r1}, cols ${c0}–${c1}: a <b>${r1 - r0 + 1}×${c1 - c0 + 1}</b> patch.`; return; }
-  if (p.kind === 'back') { const name = p.stage.replace(/([0-9])/, ' $1'); const n = p.stage === 'conv1' ? S.O : p.stage === 'pool2' ? S.Q2 : S.Q; const v = cur.back[p.stage][p.ch][p.r * n + p.c];
-    ro.innerHTML = `<b>∂L/∂${name} map ${p.ch + 1}</b> cell (${p.r}, ${p.c}) = ${fmt(v)}: how much the loss would change per unit change of that activation. ${v === 0 ? 'Zero: ReLU was off there, or max-pool did not pick it.' : ''}`; return; }
-  if (p.kind === 'gap') { ro.innerHTML = `<b>global average ${p.f + 1}</b> = mean of pool-2 map ${p.f + 1} = ${fmt(S.gap[p.f])}` + (cur.phase >= 2 ? `. ∂L/∂gap[${p.f + 1}] = Σ_c W[${p.f + 1},c]·(p[c] − y[c]) = <span class="sum">${fmt(cur.back.gap[p.f])}</span>, spread as a 16th to each cell of the map.` : '.'); return; }
-  if (p.kind === 'bar') { const y = p.c === cur.label ? 1 : 0; ro.innerHTML = `<b>class ${p.c}</b>${y ? ' (the true class)' : ''}: p = ${fmt(S.prob[p.c])}` + (cur.phase >= 2 ? `. ∂L/∂score[${p.c}] = p − y = ${fmt(S.prob[p.c])} − ${y} = <span class="sum">${fmt(S.prob[p.c] - y)}</span>` : '') + '.'; return; }
+    const R = footprint({ stage: p.stage, rect: [p.r, p.r, p.c, p.c], ch: p.ch }, S); const [r0, r1, c0, c1] = R.input.rect; const l1 = p.stage === 'conv1' || p.stage === 'pool1';
+    ro.innerHTML = `<b>${name} map ${p.ch + 1}</b> cell (${p.r}, ${p.c}) = ${fmt(maps[p.ch][p.r * n + p.c])}. Sees input rows ${r0}–${r1}, cols ${c0}–${c1}: a <b>${r1 - r0 + 1}×${c1 - c0 + 1}</b> patch. Map ${p.ch + 1} is made by ${l1 ? 'layer-1' : 'layer-2'} kernel ${p.ch + 1} (outlined).`; return; }
+  if (p.kind === 'back') {
+    if (p.stage === 'gap') { ro.innerHTML = gapText(p.ch); return; }
+    if (p.stage === 'scores') { ro.innerHTML = barText(p.c); return; }
+    const name = p.stage.replace(/([0-9])/, ' $1'); const n = p.stage === 'conv1' ? S.O : p.stage === 'pool2' ? S.Q2 : S.Q; const v = cur.back[p.stage][p.ch][p.r * n + p.c];
+    const from = { conv1: `It is ∂L/∂pool 1 map ${p.ch + 1} at (${p.r >> 1}, ${p.c >> 1}) if this cell was the maximum of its 2×2 block and its ReLU was on, else zero.`,
+      pool1: `It sums ∂L/∂conv 2 over the 3×3 window around (${p.r}, ${p.c}) in all eight maps, each weighted by slice ${p.ch + 1} of that map's kernel (outlined).`,
+      conv2: `It is ∂L/∂pool 2 map ${p.ch + 1} at (${p.r >> 1}, ${p.c >> 1}) if this cell was the maximum of its 2×2 block and its ReLU was on, else zero.`,
+      pool2: `It is a 16th of ∂L/∂gap[${p.ch + 1}]: an average spreads its gradient evenly over the 16 cells it averaged.` }[p.stage];
+    ro.innerHTML = `<b>∂L/∂${name} map ${p.ch + 1}</b> cell (${p.r}, ${p.c}) = <span class="sum">${fmt(v)}</span>: how much the loss would change per unit change of that activation. ${from} Green: the later gradients it was computed from, up to the loss.`; return; }
+  if (p.kind === 'gap') { ro.innerHTML = gapText(p.f); return; }
+  if (p.kind === 'bar') { ro.innerHTML = barText(p.c); return; }
   if (p.kind === 'w') {
-    const w = weights;
-    if (p.layer === 'W') { const wv = w.W[p.f][p.c]; const y = p.c === cur.label ? 1 : 0; ro.innerHTML = `<b>W[row ${p.f + 1}, class ${p.c}]</b> = ${fmt(wv)}: links global average ${p.f + 1} to class ${p.c}.` + (g ? ` ∂L/∂W = gap[${p.f + 1}] × (p[${p.c}] − y[${p.c}]) = ${fmt(S.gap[p.f])} × (${fmt(S.prob[p.c])} − ${y}) = <span class="sum">${fmt(g.W[p.f][p.c])}</span>${avgNote}. ${upd(wv, g.W[p.f][p.c])}` : ''); return; }
-    if (p.layer === 'B') { const wv = w.B[p.c]; const y = p.c === cur.label ? 1 : 0; ro.innerHTML = `<b>b[${p.c}]</b> = ${fmt(wv)}.` + (g ? ` ∂L/∂b[${p.c}] = p[${p.c}] − y[${p.c}] = ${fmt(S.prob[p.c])} − ${y} = <span class="sum">${fmt(g.B[p.c])}</span>${avgNote}. ${upd(wv, g.B[p.c])}` : ''); return; }
+    const g = gOf(layerOf(p.layer));
+    if (p.layer === 'W') { const wv = w0.W[p.f][p.c]; const y = p.c === cur.label ? 1 : 0; ro.innerHTML = `<b>W[row ${p.f + 1}, class ${p.c}]</b> = ${fmt(wv)}: links global average ${p.f + 1} to class ${p.c}.` + (g ? ` ∂L/∂W = gap[${p.f + 1}] × (p[${p.c}] − y[${p.c}]) = ${fmt(S.gap[p.f])} × (${fmt(S.prob[p.c])} − ${y}) = <span class="sum">${fmt(g.W[p.f][p.c])}</span>${avgNote}: what came forward into it times what came back out of it. ${upd(wv, g.W[p.f][p.c])}` : ''); return; }
+    if (p.layer === 'B') { const wv = w0.B[p.c]; const y = p.c === cur.label ? 1 : 0; ro.innerHTML = `<b>b[${p.c}]</b> = ${fmt(wv)}.` + (g ? ` ∂L/∂b[${p.c}] = p[${p.c}] − y[${p.c}] = ${fmt(S.prob[p.c])} − ${y} = <span class="sum">${fmt(g.B[p.c])}</span>${avgNote}. ${upd(wv, g.B[p.c])}` : ''); return; }
     const a = Math.floor(p.q / 3), b = p.q % 3;
-    if (p.layer === 'bank') { const wv = w.bank[p.k][p.q]; ro.innerHTML = `<b>layer-1 kernel ${p.k + 1}</b>, cell (${a}, ${b}) = ${fmt(wv)}.` + (g ? ` ∂L/∂w = Σ over ${S.O * S.O} positions of ∂L/∂conv1_${p.k + 1}[i,j] × input[i+${a}−1, j+${b}−1] (the two outlined maps) = <span class="sum">${fmt(g.bank[p.k][p.q])}</span>${avgNote}. ${upd(wv, g.bank[p.k][p.q])}` : ''); return; }
-    const wv = w.l2[p.k][p.s][p.q]; ro.innerHTML = `<b>layer-2 kernel ${p.k + 1}, slice ${p.s + 1}</b>, cell (${a}, ${b}) = ${fmt(wv)}.` + (g ? ` ∂L/∂w = Σ over ${S.Q * S.Q} positions of ∂L/∂conv2_${p.k + 1}[i,j] × pool1_${p.s + 1}[i+${a}−1, j+${b}−1] (the two outlined maps) = <span class="sum">${fmt(g.l2[p.k][p.s][p.q])}</span>${avgNote}. ${upd(wv, g.l2[p.k][p.s][p.q])}` : '');
+    if (p.layer === 'bank') { const wv = w0.bank[p.k][p.q]; ro.innerHTML = `<b>layer-1 kernel ${p.k + 1}</b>, cell (${a}, ${b}) = ${fmt(wv)}. It reads the digit and makes conv-1 map ${p.k + 1}.` + (g ? ` ∂L/∂w = Σ over ${S.O * S.O} positions of ∂L/∂conv1_${p.k + 1}[i,j] × input[i+${a}−1, j+${b}−1] (the two outlined maps: what came forward, what came back) = <span class="sum">${fmt(g.bank[p.k][p.q])}</span>${avgNote}. ${upd(wv, g.bank[p.k][p.q])}` : ''); return; }
+    const wv = w0.l2[p.k][p.s][p.q]; ro.innerHTML = `<b>layer-2 kernel ${p.k + 1}, slice ${p.s + 1}</b>, cell (${a}, ${b}) = ${fmt(wv)}. Slice ${p.s + 1} reads pool-1 map ${p.s + 1}; the kernel makes conv-2 map ${p.k + 1}.` + (g ? ` ∂L/∂w = Σ over ${S.Q * S.Q} positions of ∂L/∂conv2_${p.k + 1}[i,j] × pool1_${p.s + 1}[i+${a}−1, j+${b}−1] (the two outlined maps) = <span class="sum">${fmt(g.l2[p.k][p.s][p.q])}</span>${avgNote}. ${upd(wv, g.l2[p.k][p.s][p.q])}` : '');
   }
 }
 
@@ -422,36 +516,19 @@ function renderPlay() {
   for (const r of recent) { const d = document.createElement('div'); const cv = canvas(32); drawGrid(cv, r.input, N, N, {}); const t = document.createElement('div'); const ok = r.pred === r.label; t.className = ok ? 'ok' : 'no'; t.textContent = `${r.label}${ok ? '✓' : '✗'}`; t.title = `label ${r.label}, guessed ${r.pred}`; d.append(cv, t); th.append(d); }
 }
 
-// The forward and backward rows stay on one line: their grids are drawn at full size, then shown smaller until the wider row fits.
-// Below half size (phones) the rows wrap instead. The scale is kept between redraws and found again when the window is resized.
-let pipeK = 1, pipeWrap = false;
-function scalePipes() {
-  for (const cv of document.querySelectorAll('#fwd canvas, #bwd canvas')) { cv.style.width = cv.width * pipeK + 'px'; cv.style.height = cv.height * pipeK + 'px'; }
-  for (const b of document.querySelectorAll('#fwd .bars')) b.style.minWidth = Math.round(220 * pipeK) + 'px';
-  for (const r of [$('fwd'), $('bwd')]) r.style.columnGap = pipeWrap ? '' : Math.max(4, Math.round(14 * pipeK)) + 'px'; // the gaps around the arrows shrink too
-}
-function fitPipes() {
-  const rows = [$('fwd'), $('bwd')]; rows.forEach((r) => r.classList.toggle('wrap', pipeWrap)); scalePipes(); if (pipeWrap) return;
-  for (let i = 0; i < 6; i++) {
-    const avail = rows[0].clientWidth, need = Math.max(...rows.map((r) => r.scrollWidth));
-    if (need <= avail + 1) return;
-    pipeK *= (avail / need) * 0.98; // text does not shrink with the grids, hence a few rounds
-    if (pipeK < 0.5) { pipeK = 1; pipeWrap = true; rows.forEach((r) => r.classList.add('wrap')); scalePipes(); return; }
-    scalePipes();
-  }
-}
-let resizeTimer = 0;
-addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { pipeK = 1; pipeWrap = false; if (data && rep === '2d') renderAll(); }, 150); });
-function renderAll() { renderPhase(); if (rep === '3d') render3d(); else { renderForward(); renderBackward(); fitPipes(); renderTrips(); } readout(); renderPlay(); }
+function renderAll() { renderPhase(); if (rep === '3d') render3d(); else renderNet(); readout(); renderPlay(); }
 
 // ---------- 3D representation (blocks of cubes; the renderer is shared in ../ui/blocks3d.js) ----------
-const VIEW_KEY = 'dl-explorer.train.view', LAYOUT_KEY = 'dl-explorer.train.layout', GX = 7, WGZ = 3; // WGZ: depth gap between weight blocks
+// The same three rows as in 2D: forward (activations, with each layer's weights where they act), the gradients beneath,
+// and w′ beneath the weights. Learned weights are framed in the accent colour; each backward step frames in green what
+// it computed. In depth, each row runs away from you and the rows sit side by side as lanes.
+const VIEW_KEY = 'dl-explorer.train.view', LAYOUT_KEY = 'dl-explorer.train.layout', GX = 7;
 const O1 = N, Q1 = N / 2, Q2 = N / 4; // map sizes after conv 1, pool 1, pool 2 (padding keeps conv sizes)
-let rep = '2d', view3d = null, built3d = '', curPreset = 'whole', fitted3d = false;
+let rep = '2d', view3d = null, built3d = '', curPreset = 'whole', fitted3d = false, frameMat = null;
 function ensureView3d() {
   if (view3d) return;
   let layout = 'side'; try { if (localStorage.getItem(LAYOUT_KEY) === 'depth') layout = 'depth'; } catch { /* storage blocked */ }
-  view3d = createBlockView($('view3d'), { explode: 0.7, layout, gapX: GX, rowGap: 22, laneGap: 26, lateral: $('lateral3d'), linkStages: [0, 1], ease: reduced ? 1 : 0.12 });
+  view3d = createBlockView($('view3d'), { explode: 0.7, layout, gapX: GX, gapZ: 14, rowGap: 22, laneGap: 30, lateral: $('lateral3d'), ease: reduced ? 1 : 0.12, declutter: true });
   markLayout(layout); view3d.onPick(onPick3d); view3d.start();
 }
 function markLayout(l) { $('laySide3d').classList.toggle('sel', l === 'side'); $('layDepth3d').classList.toggle('sel', l === 'depth'); }
@@ -467,55 +544,70 @@ function setRep(r) {
   probe = null; renderAll();
   if (r === '3d') camPreset3d(curPreset);
 }
-const flatW = (M) => { const o = new Float32Array(C2 * NC); for (let f = 0; f < C2; f++) for (let c = 0; c < NC; c++) o[f * NC + c] = M[f][c]; return o; };
-function defs3d(full = false) { // the blocks for the current phase (or, full, for a complete step): forward row, gradient row beneath it, then w · ∂L/∂w · w′ rows
-  // Data and scales are functions read when the view draws, from whatever digit is current: a new digit in the same phase is a refresh, not a rebuild.
-  const ph = full ? 2 : cur.phase, hasG = full || !!gradShown(), w = shownWeights, g = gradShown, depth = view3d.layout === 'depth';
-  const S = { O: O1, Q: Q1, Q2 }, F = () => cur.S, Bk = () => cur.back;
-  const ab = (arrs) => Math.max(...arrs.map(maxAbs)); const shape = (rows, cols, chans) => `${rows}×${cols}×${chans}`; const D = [];
-  const fwd = [['in', 'digit', N, N, 1, 'gray', () => cur.input, 1]];
-  if (ph >= 1) fwd.push(['conv1', 'conv 1 + ReLU', S.O, S.O, C1, 'div', (ch) => F().a1[ch], () => ab(F().a1)], ['pool1', 'pool 1', S.Q, S.Q, C1, 'div', (ch) => F().p1[ch], () => ab(F().p1)],
-    ['conv2', 'conv 2 + ReLU', S.Q, S.Q, C2, 'div', (ch) => F().a2[ch], () => ab(F().a2)], ['pool2', 'pool 2', S.Q2, S.Q2, C2, 'div', (ch) => F().p2[ch], () => ab(F().p2)],
-    ['gap', 'global avg', 1, 1, C2, 'div', (ch) => [F().gap[ch]], () => maxAbs(F().gap)], ['scores', 'softmax', NC, 1, 1, 'div', () => F().prob, 1]);
-  let x = 0; const xs = {};
-  for (const [id, title, rows, cols, chans, mode, data, scale] of fwd) { xs[id] = x; D.push({ id, label: `${title}\n${id === 'scores' ? NC + ' classes' : id === 'gap' ? '1×1×' + C2 : shape(rows, cols, chans)}`, rows, cols, chans, mode, data, scale, row: 0, x0: x }); x += cols + GX; }
-  if (ph >= 2) {
-    for (const [id, title, rows, cols, chans, data, scale] of [['conv1', '∂L/∂conv 1', S.O, S.O, C1, (ch) => Bk().conv1[ch], () => ab(Bk().conv1)], ['pool1', '∂L/∂pool 1', S.Q, S.Q, C1, (ch) => Bk().pool1[ch], () => ab(Bk().pool1)],
-      ['conv2', '∂L/∂conv 2', S.Q, S.Q, C2, (ch) => Bk().conv2[ch], () => ab(Bk().conv2)], ['pool2', '∂L/∂pool 2', S.Q2, S.Q2, C2, (ch) => Bk().pool2[ch], () => ab(Bk().pool2)],
-      ['gap', '∂L/∂gap', 1, 1, C2, (ch) => [Bk().gap[ch]], () => maxAbs(Bk().gap)], ['scores', '∂L/∂scores = p − y', NC, 1, 1, () => Bk().scores, 1]])
-      D.push({ id: 'd_' + id, label: `${title}\n${shape(rows, cols, chans)}`, rows, cols, chans, mode: 'div', data, scale, row: 1, x0: xs[id], at: id }); }
-  const sB = () => ab(w().bank), sL = () => Math.max(...w().l2.flat().map(maxAbs)), sW = () => maxAbs(flatW(w().W)), sb = () => maxAbs(w().B);
+const L2IDS = Array.from({ length: C2 }, (_, k) => `l2_${k}`);
+const WEIGHT_GROUPS = { l1: ['bank'], l2: L2IDS, fc: ['W', 'B'] };
+const layerOfId = (base) => (base === 'bank' ? 'l1' : base.startsWith('l2_') ? 'l2' : base === 'W' || base === 'B' ? 'fc' : { conv1: 'l1', pool1: 'l2', conv2: 'l2', pool2: 'l2', gap: 'fc', scores: 'fc' }[base]);
+function defs3d(full = false) { // the blocks for the current phase (or, full, for a complete step)
+  // Data and scales are functions read when the view draws, so a new digit in the same phase is a refresh, not a rebuild.
+  const ph = full ? P.BL1 : cur.phase, on = (layer) => full || ph >= REVEAL[layer], fwd = full || ph >= P.FWD, depth = view3d.layout === 'depth';
+  const w = shownWeights, g = () => shown, F = () => cur.S, Bk = () => cur.back;
+  const ab = (arrs) => Math.max(...arrs.map(maxAbs)), shape = (rows, cols, chans) => `${rows}×${cols}×${chans}`, D = [];
+  const X = {}; let x = 0; for (const [id, wd] of [['in', N], ['bank', 3], ['conv1', O1], ['pool1', Q1], ['l2', 7.5], ['conv2', Q1], ['pool2', Q2], ['gap', 1], ['fc', NC], ['scores', 1]]) { X[id] = x; x += wd + GX; }
+  const kg = (k) => ({ dx: depth ? ((k & 1) - 0.5) * 4.5 : (k & 1) * 4.5, dy: (1.5 - (k >> 1)) * 4.5 }); // layer-2 kernel k in a 2 × 4 grid
+  const sB = () => ab(w().bank), sL = () => Math.max(...w().l2.flat().map(maxAbs)), sW = () => maxAbs(flatW(w().W)), sb = () => Math.max(maxAbs(w().B), on('fc') ? maxAbs(primeOf((W) => W.B)) : 0);
   const gB = () => ab(g().bank), gL = () => Math.max(...g().l2.flat().map(maxAbs)), gW = () => maxAbs(flatW(g().W)), gb = () => maxAbs(g().B);
-  const nxt = (a, d) => a.map((v, q) => v - lr * d[q]);
-  const kinds = [['w', 2, 'w']]; if (hasG) kinds.push(['∂L/∂w', 3, 'g'], ['w′ = w − lr·∂L/∂w', 4, 'n']);
-  for (const [title, row, kind] of kinds) {
-    const ver = (getW, getG) => (kind === 'g' ? getG : kind === 'n' ? (ch) => nxt(getW(ch), getG(ch)) : getW);
-    const sc = (sw, sg) => (kind === 'g' ? sg : sw);
-    let x = 0;
-    D.push({ id: 'bank_' + kind, label: row === 2 ? 'layer-1 kernels\n3×3×4' : title + '\n ', rows: 3, cols: 3, chans: C1, mode: 'div', data: ver((ch) => w().bank[ch], (ch) => g().bank[ch]), scale: sc(sB, gB), row, x0: x, gapZ: WGZ }); x += 3 + GX;
-    for (let k = 0; k < C2; k++) { D.push({ id: `l2_${k}_${kind}`, label: row === 2 && k === 3 ? 'layer-2 kernels\n8 × 3×3×4' : null, rows: 3, cols: 3, chans: C1, mode: 'div', data: ver((ch) => w().l2[k][ch], (ch) => g().l2[k][ch]), scale: sc(sL, gL), row, x0: x, gapZ: WGZ }); x += 3 + GX; } // the label sits over the middle of the eight
-    const Wd = { id: 'W_' + kind, label: row === 2 ? 'FC weights\n8×10' : null, rows: C2, cols: NC, chans: 1, mode: 'div', data: ver(() => flatW(w().W), () => flatW(g().W)), scale: sc(sW, gW), row, x0: x, gapZ: WGZ }; x += NC + GX;
-    const Bd = { id: 'B_' + kind, label: row === 2 ? 'FC biases\n1×10' : null, rows: 1, cols: NC, chans: 1, mode: 'div', data: ver(() => w().B, () => g().B), scale: sc(sb, gb), row, x0: x, gapZ: 2 * WGZ };
-    if (depth) D.push(Bd, Wd); else D.push(Wd, Bd); // in depth the biases come first, so the two labels do not land on each other
-  }
+  const prime = (pick) => () => primeOf(pick);
+  const fcX = depth ? -3 : 0, scX = depth ? { at: 'W', dx: 6.5 } : {}; // in depth the scores stand beside the FC weights, not behind them
+  const G = fwd ? {} : { ghost: true }; // before the forward pass the activations hold their places without being drawn
+  // row 0: forward, weights inline
+  D.push({ id: 'in', label: 'digit\n16×16×1', rows: N, cols: N, chans: 1, mode: 'gray', data: () => cur.input, scale: 1, row: 0, x0: X.in });
+  D.push({ id: 'bank', label: 'layer-1 kernels\n4 × 3×3', rows: 3, cols: 3, chans: C1, mode: 'div', data: (ch) => w().bank[ch], scale: sB, row: 0, x0: X.bank });
+  D.push({ ...G, id: 'conv1', label: `conv 1 + ReLU\n${shape(O1, O1, C1)}`, rows: O1, cols: O1, chans: C1, mode: 'div', data: (ch) => F().a1[ch], scale: () => ab(F().a1), row: 0, x0: X.conv1 },
+    { ...G, id: 'pool1', label: `pool 1\n${shape(Q1, Q1, C1)}`, rows: Q1, cols: Q1, chans: C1, mode: 'div', data: (ch) => F().p1[ch], scale: () => ab(F().p1), row: 0, x0: X.pool1 });
+  for (let k = 0; k < C2; k++) D.push({ id: `l2_${k}`, label: k === 0 ? 'layer-2 kernels\n8 × 3×3×4' : null, rows: 3, cols: 3, chans: C1, mode: 'div', data: (ch) => w().l2[k][ch], scale: sL, row: 0, x0: X.l2, ...kg(k), at: k ? 'l2_0' : undefined });
+  D.push({ ...G, id: 'conv2', label: `conv 2 + ReLU\n${shape(Q1, Q1, C2)}`, rows: Q1, cols: Q1, chans: C2, mode: 'div', data: (ch) => F().a2[ch], scale: () => ab(F().a2), row: 0, x0: X.conv2 },
+    { ...G, id: 'pool2', label: `pool 2\n${shape(Q2, Q2, C2)}`, rows: Q2, cols: Q2, chans: C2, mode: 'div', data: (ch) => F().p2[ch], scale: () => ab(F().p2), row: 0, x0: X.pool2 },
+    { ...G, id: 'gap', label: `global avg\n1×1×${C2}`, rows: 1, cols: 1, chans: C2, mode: 'div', data: (ch) => [F().gap[ch]], scale: () => maxAbs(F().gap), row: 0, x0: X.gap, gapZ: 18 });
+  D.push({ id: 'W', label: 'FC weights, biases\n8×10, 10', rows: C2, cols: NC, chans: 1, mode: 'div', data: () => flatW(w().W), scale: sW, row: 0, x0: X.fc, dx: fcX, dy: 2 },
+    { id: 'B', label: null, rows: 1, cols: NC, chans: 1, mode: 'div', data: () => w().B, scale: sb, row: 0, x0: X.fc, dx: fcX, dy: -4, at: 'W' });
+  D.push({ ...G, id: 'scores', label: 'softmax\n10 classes', rows: NC, cols: 1, chans: 1, mode: 'div', data: () => F().prob, scale: 1, row: 0, x0: X.scores, ...scX });
+  // row 1: gradients, each under what it is the gradient of
+  const back = (id, layer, label, rows, cols, chans, data, scale, extra = {}) => { if (on(layer)) D.push({ id: 'd_' + id, label, rows, cols, chans, mode: 'div', data, scale, row: 1, at: id, ...extra }); };
+  back('bank', 'l1', '∂L/∂w\n ', 3, 3, C1, (ch) => g().bank[ch], gB);
+  back('conv1', 'l1', `∂L/∂conv 1\n${shape(O1, O1, C1)}`, O1, O1, C1, (ch) => Bk().conv1[ch], () => ab(Bk().conv1));
+  back('pool1', 'l2', `∂L/∂pool 1\n${shape(Q1, Q1, C1)}`, Q1, Q1, C1, (ch) => Bk().pool1[ch], () => ab(Bk().pool1));
+  for (let k = 0; k < C2; k++) back(`l2_${k}`, 'l2', k === 0 ? '∂L/∂w\n ' : null, 3, 3, C1, (ch) => g().l2[k][ch], gL, kg(k));
+  back('conv2', 'l2', `∂L/∂conv 2\n${shape(Q1, Q1, C2)}`, Q1, Q1, C2, (ch) => Bk().conv2[ch], () => ab(Bk().conv2));
+  back('pool2', 'l2', `∂L/∂pool 2\n${shape(Q2, Q2, C2)}`, Q2, Q2, C2, (ch) => Bk().pool2[ch], () => ab(Bk().pool2));
+  back('gap', 'fc', `∂L/∂gap\n1×1×${C2}`, 1, 1, C2, (ch) => [Bk().gap[ch]], () => maxAbs(Bk().gap));
+  back('W', 'fc', '∂L/∂W, ∂L/∂b\n ', C2, NC, 1, () => flatW(g().W), gW, { dx: fcX, dy: 2 });
+  back('B', 'fc', null, 1, NC, 1, () => g().B, gb, { dx: fcX, dy: -4 });
+  back('scores', 'fc', '∂L/∂scores = p − y\n10', NC, 1, 1, () => Bk().scores, 1, depth ? { dx: 6.5 } : {});
+  // row 2: w′ = w − lr·∂L/∂w, under each weight
+  const upd = (id, layer, label, rows, cols, chans, data, scale, extra = {}) => { if (on(layer)) D.push({ id: 'n_' + id, label, rows, cols, chans, mode: 'div', data, scale, row: 2, at: id, ...extra }); };
+  upd('bank', 'l1', 'w′ = w − lr·∂L/∂w\n ', 3, 3, C1, (ch) => primeOf((W) => W.bank[ch]), sB);
+  for (let k = 0; k < C2; k++) upd(`l2_${k}`, 'l2', k === 0 ? 'w′\n ' : null, 3, 3, C1, (ch) => primeOf((W) => W.l2[k][ch]), sL, kg(k));
+  upd('W', 'fc', 'w′\n ', C2, NC, 1, prime((W) => flatW(W.W)), sW, { dx: fcX, dy: 2 });
+  upd('B', 'fc', null, 1, NC, 1, prime((W) => W.B), sb, { dx: fcX, dy: -4 });
   return D;
 }
 function render3d() {
-  const key = `${view3d.layout}:${cur.phase >= 1}:${cur.phase >= 2}:${!!gradShown()}`; // which rows exist, and how they are laid out; values are read on every refresh
+  const key = `${view3d.layout}:${cur.phase}`; // which blocks exist; their values are read on every refresh
   if (key !== built3d) { built3d = key; view3d.setBlocks(defs3d()); if (!fitted3d) { fitted3d = true; camPreset3d('whole'); } }
   else view3d.refresh();
-  highlights3d();
+  decorate3d(); highlights3d();
+}
+function decorate3d() { // accent frames on the learned weights; green frames on what the last backward step computed
+  const v = view3d; v.clear(v.aux);
+  if (!frameMat) frameMat = new THREE.LineBasicMaterial({ color: 0x2457a8, transparent: true, opacity: 0.6 });
+  frameMat.color.set(cssVar('--accent'));
+  const frame = (bx, mat) => { const size = bx.getSize(new THREE.Vector3()), e = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(size.x, size.y, size.z)), mat); e.position.copy(bx.getCenter(new THREE.Vector3())); v.aux.add(e); };
+  for (const prefix of ['', 'd_', 'n_']) for (const ids of Object.values(WEIGHT_GROUPS)) { const bs = ids.map((id) => v.blockById(prefix + id)).filter(Boolean); if (bs.length) frame(extentOf(bs).expandByScalar(0.8), frameMat); }
+  const fl = frontLayer(); if (!fl) return;
+  for (const b of v.blocks) { const pre = b.id.startsWith('d_') ? 'd_' : b.id.startsWith('n_') ? 'n_' : ''; if (pre && layerOfId(b.id.slice(2)) === fl) frame(extentOf([b]).expandByScalar(0.35), v.mats.hlEdge); }
 }
 const extentOf = (blocks) => { const bx = new THREE.Box3(); for (const b of blocks) bx.union(view3d.bounds(b, 0, b.rows - 1, 0, b.cols - 1, 0, b.chans - 1)); return bx; };
-function fit(blocks, theta, phi, pad) { // frame the given blocks: distance from their extent and the camera's fields of view
-  const bx = extentOf(blocks);
-  if (bx.isEmpty()) return;
-  const size = bx.getSize(new THREE.Vector3()), centre = bx.getCenter(new THREE.Vector3());
-  const vf = (38 / 2) * Math.PI / 180, hf = Math.atan(Math.tan(vf) * view3d.camera.aspect);
-  const dist = Math.max(size.y / (2 * Math.tan(vf)), size.x / (2 * Math.tan(hf))) * pad + size.z;
-  view3d.setGoal({ theta, phi, dist, target: centre });
-}
-function fitDepth(blocks, theta, phi, pad) { // depth layout: a long, tapering scene seen from above, so frame it by projecting every block's corners
+function fitView(blocks, theta, phi, pad) { // frame the blocks by projecting every one's corners, with room above the top ones for labels
   if (!blocks.length) return;
   const corners = []; for (const b of blocks) { const bx = view3d.bounds(b, 0, b.rows - 1, 0, b.cols - 1, 0, b.chans - 1); for (const x of [bx.min.x, bx.max.x]) for (const y of [bx.min.y, bx.max.y]) for (const z of [bx.min.z, bx.max.z]) corners.push(new THREE.Vector3(x, y, z)); }
   const cam = new THREE.PerspectiveCamera(38, view3d.camera.aspect, 0.1, 5000), q = new THREE.Vector3();
@@ -531,25 +623,25 @@ function fitDepth(blocks, theta, phi, pad) { // depth layout: a long, tapering s
   }
   view3d.setGoal({ theta, phi, dist, target });
 }
-const PRESET_ROWS = { whole: [0, 1, 2, 3, 4], forward: [0], backward: [0, 1], weights: [2, 3, 4] };
-const SIDE_CAM = { whole: [0.4, 1.25, 1.15], forward: [0.45, 1.15, 1.35], backward: [0.45, 1.2, 1.35], weights: [0.3, 1.2, 1.5] }; // theta, phi, padding
-const DEPTH_CAM = { whole: [0.15, 0.9, 1.04], forward: [0.55, 0.72, 1.06], backward: [0.35, 0.8, 1.05], weights: [0.15, 0.85, 1.05] };
+const PRESET_ROWS = { whole: [0, 1, 2], forward: [0], backward: [0, 1], update: [1, 2] };
+const SIDE_CAM = { whole: [0.3, 1.2, 1.03], forward: [0.35, 1.15, 1.04], backward: [0.35, 1.2, 1.03], update: [0.3, 1.2, 1.04] }; // theta, phi, padding
+const DEPTH_CAM = { whole: [0.35, 1.05, 1.04], forward: [0.55, 0.9, 1.06], backward: [0.4, 1.0, 1.05], update: [0.3, 1.0, 1.05] };
 function camPreset3d(name) {
   curPreset = name; const blocks = view3d.place(defs3d(true)).filter((b) => PRESET_ROWS[name].includes(b.row || 0)); // a complete step's layout: the frame stays put as rows come and go
-  if (view3d.layout === 'side') fit(blocks, ...SIDE_CAM[name]); else fitDepth(blocks, ...DEPTH_CAM[name]);
+  fitView(blocks, ...(view3d.layout === 'side' ? SIDE_CAM : DEPTH_CAM)[name]);
   document.querySelectorAll('#view3d .cams button[data-cam]').forEach((x) => x.classList.toggle('sel', x.dataset.cam === name));
 }
-function onPick3d(hit) { // a picked cube becomes one of the probes the readout already understands
+function onPick3d(hit) { // a picked cube becomes one of the probes the 2D band and the readout understand
   let np = null;
-  if (hit) { const { block: b, r, c, ch } = hit; const id = b.id;
-    if (id === 'in') np = { kind: 'pixel', r, c };
-    else if (id === 'gap' || id === 'd_gap') np = { kind: 'gap', f: ch };
-    else if (id === 'scores' || id === 'd_scores') np = { kind: 'bar', c: r };
-    else if (id.startsWith('d_')) np = { kind: 'back', stage: id.slice(2), r, c, ch };
-    else if (id.startsWith('bank_')) np = { kind: 'w', layer: 'bank', k: ch, q: r * 3 + c };
-    else if (id.startsWith('l2_')) np = { kind: 'w', layer: 'l2', k: +id.split('_')[1], s: ch, q: r * 3 + c };
-    else if (id.startsWith('W_')) np = { kind: 'w', layer: 'W', f: r, c };
-    else if (id.startsWith('B_')) np = { kind: 'w', layer: 'B', c };
+  if (hit) { const { block: b, r, c, ch } = hit; const id = b.id, pre = id.startsWith('d_') ? 'd_' : id.startsWith('n_') ? 'n_' : '', base = id.slice(pre.length);
+    if (base === 'bank') np = { kind: 'w', layer: 'bank', k: ch, q: r * 3 + c };
+    else if (base.startsWith('l2_')) np = { kind: 'w', layer: 'l2', k: +base.split('_')[1], s: ch, q: r * 3 + c };
+    else if (base === 'W') np = { kind: 'w', layer: 'W', f: r, c };
+    else if (base === 'B') np = { kind: 'w', layer: 'B', c };
+    else if (pre === 'd_') np = base === 'gap' ? { kind: 'back', stage: 'gap', ch } : base === 'scores' ? { kind: 'back', stage: 'scores', c: r } : { kind: 'back', stage: base, r, c, ch };
+    else if (id === 'in') np = { kind: 'pixel', r, c };
+    else if (id === 'gap') np = { kind: 'gap', f: ch };
+    else if (id === 'scores') np = { kind: 'bar', c: r };
     else np = { kind: 'map', stage: id, r, c, ch }; }
   if (JSON.stringify(np) !== JSON.stringify(probe)) { probe = np; readout(); highlights3d(); }
 }
@@ -558,28 +650,38 @@ function highlights3d() {
   const B = (id) => v.blockById(id), M = v.mats;
   const box = (b, r0, r1, c0, c1, ch) => v.boxAt(b, r0, r1, c0, c1, ch, v.hl, M.hlFill, M.hlEdge);
   const whole = (b, ch) => { box(b, 0, b.rows - 1, 0, b.cols - 1, ch); return v.bounds(b, 0, b.rows - 1, 0, b.cols - 1, ch, ch); };
+  const allCh = (b) => { v.boxSpanZ(b, 0, b.rows - 1, 0, b.cols - 1, 0, b.chans - 1, v.hl, M.hlFill, M.hlEdge); return v.bounds(b, 0, b.rows - 1, 0, b.cols - 1, 0, b.chans - 1); };
   const link = (a, b) => v.connect(a, b, M.rfLine, v.hl);
+  const chain = (R, steps) => { // boxes on each stage of a footprint, linked in order
+    const out = []; for (const [st, id] of steps) { const h = R[st], b = B(id); if (!h || !b) continue;
+      let [r0, r1, c0, c1] = h.rect; if (st === 'scores') [r0, r1, c0, c1] = [c0, c1, 0, 0]; // the scores block is a column of 10
+      const lit = [...Array(b.chans).keys()].filter((ch) => h.chs === null || h.chs.has(ch)); lit.forEach((ch) => box(b, r0, r1, c0, c1, ch)); out.push(v.bounds(b, r0, r1, c0, c1, Math.min(...lit), Math.max(...lit))); }
+    for (let i = 0; i + 1 < out.length; i++) link(out[i], out[i + 1]); return out; };
   if (p.kind === 'pixel') { const b = B('in'); if (b) box(b, p.r, p.r, p.c, p.c, 0); return; }
-  if (p.kind === 'map') { // receptive field back through the forward row, as on the explorer
-    const R = footprint({ stage: p.stage, rect: [p.r, p.r, p.c, p.c], ch: p.ch }, cur.S); const chain = [];
-    for (const st of ['input', 'conv1', 'pool1', 'conv2', 'pool2']) { const h = R[st]; const b = B(st === 'input' ? 'in' : st); if (!h || !b) continue; const [r0, r1, c0, c1] = h.rect;
-      const lit = [...Array(b.chans).keys()].filter((ch) => h.chs === null || h.chs.has(ch)); lit.forEach((ch) => box(b, r0, r1, c0, c1, ch)); chain.push(v.bounds(b, r0, r1, c0, c1, Math.min(...lit), Math.max(...lit))); }
-    for (let i = 0; i + 1 < chain.length; i++) link(chain[i], chain[i + 1]); return; }
-  if (p.kind === 'back') { const b = B('d_' + p.stage); if (b) box(b, p.r, p.r, p.c, p.c, p.ch); return; }
-  if (p.kind === 'gap') { const pool2 = B('pool2'), gap = B('gap'), W = B('W_w'); let a = null, g2 = null;
+  if (p.kind === 'map') { // receptive field back through the forward row, and the kernel that made the map
+    chain(footprint({ stage: p.stage, rect: [p.r, p.r, p.c, p.c], ch: p.ch }, cur.S), [['input', 'in'], ['conv1', 'conv1'], ['pool1', 'pool1'], ['conv2', 'conv2'], ['pool2', 'pool2']]);
+    if (p.stage === 'conv1' || p.stage === 'pool1') { if (B('bank')) whole(B('bank'), p.ch); } else if (B(`l2_${p.ch}`)) allCh(B(`l2_${p.ch}`));
+    return; }
+  if (p.kind === 'back') { // the later gradients it was computed from, up to the loss, and the weights the error came through
+    const R = gradFootprint(p.stage === 'scores' ? { stage: 'scores', c: p.c } : { stage: p.stage, r: p.r, c: p.c, ch: p.ch }, cur.S);
+    chain(R, [['conv1', 'd_conv1'], ['pool1', 'd_pool1'], ['conv2', 'd_conv2'], ['pool2', 'd_pool2'], ['gap', 'd_gap'], ['scores', 'd_scores']]);
+    if (p.stage === 'conv1' || p.stage === 'pool1') { const s = [...R.pool1.chs][0]; for (const id of L2IDS) if (B(id)) whole(B(id), s); }
+    if (R.gap && B('W')) for (let f = 0; f < C2; f++) if (R.gap.chs === null || R.gap.chs.has(f)) box(B('W'), f, f, 0, NC - 1, 0);
+    return; }
+  if (p.kind === 'gap') { const pool2 = B('pool2'), gap = B('gap'), W = B('W'); let a = null, g2 = null;
     if (pool2) a = whole(pool2, p.f); if (gap) g2 = whole(gap, p.f); if (W) box(W, p.f, p.f, 0, NC - 1, 0); if (a && g2) link(a, g2); return; }
-  if (p.kind === 'bar') { const gap = B('gap'), sc = B('scores'), W = B('W_w'); let a = null, s = null;
+  if (p.kind === 'bar') { const gap = B('gap'), sc = B('scores'), W = B('W'), Bb = B('B'); let a = null, s = null;
     if (gap) { for (let f = 0; f < C2; f++) box(gap, 0, 0, 0, 0, f); a = v.bounds(gap, 0, 0, 0, 0, 0, C2 - 1); }
     if (sc) { box(sc, p.c, p.c, 0, 0, 0); s = v.bounds(sc, p.c, p.c, 0, 0, 0, 0); }
-    if (W) box(W, 0, C2 - 1, p.c, p.c, 0); if (a && s) link(a, s); return; }
-  if (p.kind === 'w') { // the hovered weight in each of its rows, and the two blocks whose product it is
+    if (W) box(W, 0, C2 - 1, p.c, p.c, 0); if (Bb) box(Bb, 0, 0, p.c, p.c, 0); if (a && s) link(a, s); return; }
+  if (p.kind === 'w') { // the hovered weight in each of its rows, and the two blocks whose product its gradient is
     const isFC = p.layer === 'W' || p.layer === 'B'; const a = isFC ? (p.layer === 'W' ? p.f : 0) : Math.floor(p.q / 3), c = isFC ? p.c : p.q % 3, ch = p.layer === 'bank' ? p.k : p.layer === 'l2' ? p.s : 0;
     const base = p.layer === 'l2' ? `l2_${p.k}` : p.layer; let target = null;
-    for (const kind of ['w', 'g', 'n']) { const b = B(`${base}_${kind}`); if (!b) continue; box(b, a, a, c, c, ch); if (!target) target = v.bounds(b, a, a, c, c, ch, ch); }
+    for (const pre of ['', 'd_', 'n_']) { const b = B(pre + base); if (!b) continue; box(b, a, a, c, c, ch); if (!target) target = v.bounds(b, a, a, c, c, ch, ch); }
     const srcs = [];
-    if (p.layer === 'bank') { if (B('d_conv1')) srcs.push(whole(B('d_conv1'), p.k)); if (B('in')) srcs.push(whole(B('in'), 0)); }
-    else if (p.layer === 'l2') { if (B('d_conv2')) srcs.push(whole(B('d_conv2'), p.k)); if (B('pool1')) srcs.push(whole(B('pool1'), p.s)); }
-    else { const gap = B('gap'), sc = B('scores'); if (p.layer === 'W' && gap) { box(gap, 0, 0, 0, 0, p.f); srcs.push(v.bounds(gap, 0, 0, 0, 0, p.f, p.f)); } if (sc) { box(sc, p.c, p.c, 0, 0, 0); srcs.push(v.bounds(sc, p.c, p.c, 0, 0, 0, 0)); } }
+    if (p.layer === 'bank') { if (B('in')) srcs.push(whole(B('in'), 0)); if (B('d_conv1')) srcs.push(whole(B('d_conv1'), p.k)); }
+    else if (p.layer === 'l2') { if (B('pool1')) srcs.push(whole(B('pool1'), p.s)); if (B('d_conv2')) srcs.push(whole(B('d_conv2'), p.k)); }
+    else { if (p.layer === 'W' && B('gap')) { box(B('gap'), 0, 0, 0, 0, p.f); srcs.push(v.bounds(B('gap'), 0, 0, 0, 0, p.f, p.f)); } const ds = B('d_scores'); if (ds) { box(ds, p.c, p.c, 0, 0, 0); srcs.push(v.bounds(ds, p.c, p.c, 0, 0, 0, 0)); } }
     if (target) for (const s of srcs) link(s, target);
   }
 }
@@ -595,7 +697,7 @@ $('nextBtn').onclick = () => { if (playing) setPlaying(false); nextDigit(); };
 $('playBtn').onclick = () => setPlaying(!playing);
 $('speed').onchange = (e) => { speed = +e.target.value; };
 $('lr').oninput = (e) => { lr = +lrOf(+e.target.value).toPrecision(2); $('lrv').textContent = String(lr); if (!playing) renderAll(); };
-$('batch').onchange = (e) => { batch = +e.target.value; collected = []; shown = null; if (cur && cur.phase === 2) cur.phase = 1; renderAll(); };
+$('batch').onchange = (e) => { batch = +e.target.value; collected = []; shown = null; if (cur && cur.phase >= P.BFC && cur.phase < P.UPD) cur.phase = P.FWD; renderAll(); };
 $('resetBtn').onclick = () => { setPlaying(false); reset({ newSeed: true }); };
 $('edgesBtn').onclick = () => { setPlaying(false); reset({ layer1: 'edges' }); };
 document.addEventListener('keydown', (e) => { if (!data || e.target.closest('input,select,button,textarea')) return; if (e.code === 'Space') { e.preventDefault(); $('stepBtn').click(); } else if (e.code === 'Enter') { e.preventDefault(); $('nextBtn').click(); } });
