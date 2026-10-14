@@ -6,7 +6,8 @@
 // Blocks sit in rows. Side by side: a row runs left to right and rows stack downwards (rowGap apart).
 // Depth: a row runs away from the viewer along z and rows become lanes next to each other (laneGap apart).
 // A block with `at: <id>` takes that block's place along the flow, so a row can line up under another;
-// `gapZ` on a block overrides the depth gap after it. `place(defs)` lays blocks out without building them (for camera fits).
+// `gapZ` on a block overrides the depth gap after it; `dx`, `dy` shift a block within its row (a grid of small blocks);
+// a `ghost` block holds its place in the layout without being built. `place(defs)` lays blocks out without building them.
 import { isDark, cssVar } from './grid.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -21,7 +22,7 @@ export function colorFor(v, scale, mode, dark = isDark(), out = new THREE.Color(
   const t = clamp(v / scale, -1, 1); return out.copy(zero).lerp(t < 0 ? C_NEG : C_POS, Math.abs(t));
 }
 
-export function createBlockView(viewEl, { explode = 0.7, layout = 'side', gapX = 5, gapZ = 7, rowGap = 22, laneGap = 26, lateral = null, linkStages = false, ease = 0.12 } = {}) {
+export function createBlockView(viewEl, { explode = 0.7, layout = 'side', gapX = 5, gapZ = 7, rowGap = 22, laneGap = 26, lateral = null, linkStages = false, ease = 0.12, declutter = false } = {}) {
   const renderer = new THREE.WebGLRenderer({ antialias: true }); renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1)); viewEl.append(renderer.domElement);
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 1000);
@@ -50,9 +51,9 @@ export function createBlockView(viewEl, { explode = 0.7, layout = 'side', gapX =
   const zOf = (ch) => -ch * (1 + view.explode);
   function layoutOffsets(list = view.blocks) { // depth: each row recedes on its own, a block with `at` starts where that block starts
     const z = {}, at = {}; list.forEach((b) => { const row = b.row || 0; b.z0 = b.at != null && at[b.at] != null ? at[b.at] : (z[row] ?? 0); at[b.id] = b.z0; z[row] = b.z0 - (b.chans * (1 + view.explode) + (b.gapZ ?? gapZ)); }); }
-  function voxelPos(b, r, c, ch) { const y = (b.rows - 1 - r) - (b.rows - 1) / 2;
-    if (view.layout === 'side') return new THREE.Vector3(b.x0 + c, y + (b.y0 || 0), zOf(ch));
-    return new THREE.Vector3(c - (b.cols - 1) / 2 + (b.row || 0) * laneGap, y, b.z0 + zOf(ch)); }
+  function voxelPos(b, r, c, ch) { const y = (b.rows - 1 - r) - (b.rows - 1) / 2 + (b.dy || 0);
+    if (view.layout === 'side') return new THREE.Vector3(b.x0 + (b.dx || 0) + c, y + (b.y0 || 0), zOf(ch));
+    return new THREE.Vector3(c - (b.cols - 1) / 2 + (b.row || 0) * laneGap + (b.dx || 0), y, b.z0 + zOf(ch)); }
   // bounding box of a cell range across channels ch0..ch1 (indices may run outside the block, e.g. padding)
   function bounds(b, r0, r1, c0, c1, ch0, ch1) { const bx = new THREE.Box3(); [[r0, c0, ch0], [r1, c1, ch1], [r0, c1, ch0], [r1, c0, ch1]].forEach(([r, c, ch]) => { const p = voxelPos(b, r, c, ch); bx.expandByPoint(p.clone().addScalar(-0.5)); bx.expandByPoint(p.clone().addScalar(0.5)); }); return bx; }
   const flowAxis = () => (view.layout === 'side' ? 'x' : 'z');
@@ -67,23 +68,24 @@ export function createBlockView(viewEl, { explode = 0.7, layout = 'side', gapX =
   const linked = (b) => linkStages === true || (Array.isArray(linkStages) && linkStages.includes(b.row || 0));
   function updateStageLinks() { stage.clear(); if (!linkStages || view.layout !== 'depth') return; // consecutive blocks of a row; linkStages: true, or the rows to link
     for (let i = 0; i + 1 < view.blocks.length; i++) { const A = view.blocks[i], Bb = view.blocks[i + 1]; if ((A.row || 0) !== (Bb.row || 0) || !linked(A)) continue; connect(bounds(A, 0, A.rows - 1, 0, A.cols - 1, 0, A.chans - 1), bounds(Bb, 0, Bb.rows - 1, 0, Bb.cols - 1, 0, Bb.chans - 1), mats.stageLine, stage); } }
-  function place(defs) { // positions only: x0 (side), y0 (row), z0 (depth)
+  function place(defs, withGhosts = false) { // positions only: x0 (side), y0 (row), z0 (depth)
     const cursors = {}, xs = {};
     const list = defs.filter((d) => !d.hidden).map((d) => {
       const b = { ...d }; const row = b.row || 0;
       if (b.x0 == null) b.x0 = b.at != null && xs[b.at] != null ? xs[b.at] : cursors[row] || 0; xs[b.id] = b.x0;
       cursors[row] = b.x0 + b.cols + gapX; b.y0 = -row * rowGap; return b; });
-    layoutOffsets(list); return list;
+    layoutOffsets(list); return withGhosts ? list : list.filter((b) => !b.ghost);
   }
   function setBlocks(defs) {
     net.children.forEach((m) => m.dispose()); net.clear(); // dispose frees the instance buffers of a rebuild
-    view.blocks = place(defs).map((b) => { const mesh = new THREE.InstancedMesh(cubeGeo, mat, b.rows * b.cols * b.chans); mesh.userData.block = b; b.mesh = mesh; net.add(mesh); return b; });
+    view.layoutList = place(defs, true); // ghosts included, so a refresh keeps every block where the full layout puts it
+    view.blocks = view.layoutList.filter((b) => !b.ghost).map((b) => { const mesh = new THREE.InstancedMesh(cubeGeo, mat, b.rows * b.cols * b.chans); mesh.userData.block = b; b.mesh = mesh; net.add(mesh); return b; });
     refresh(); return view.blocks;
   }
   const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3();
   const _col = new THREE.Color();
   function refresh() { // positions + colours
-    layoutOffsets(); const dark = isDark();
+    layoutOffsets(view.layoutList || view.blocks); const dark = isDark();
     view.blocks.forEach((b) => { let i = 0; const scale = typeof b.scale === 'function' ? b.scale() : b.scale;
       for (let ch = 0; ch < b.chans; ch++) { const d = b.data(ch);
         for (let r = 0; r < b.rows; r++) for (let c = 0; c < b.cols; c++) { const v = d[r * b.cols + c];
@@ -110,12 +112,18 @@ export function createBlockView(viewEl, { explode = 0.7, layout = 'side', gapX =
   // ---- labels ----
   const labelEls = new Map();
   function syncLabels() {
-    const rect = renderer.domElement.getBoundingClientRect();
+    const rect = renderer.domElement.getBoundingClientRect(), shown = [];
     view.blocks.forEach((b) => { if (!b.label) return; let el = labelEls.get(b.id); if (!el) { el = document.createElement('div'); el.className = 'lbl'; viewEl.append(el); labelEls.set(b.id, el); }
-      const [t, sh] = b.label.split('\n'); el.innerHTML = `<b>${t}</b>${sh}`;
+      const [t, sh] = b.label.split('\n'); const html = `<b>${t}</b>${sh}`; if (el._html !== html) { el.innerHTML = html; el._html = html; }
       const bx = bounds(b, 0, b.rows - 1, 0, b.cols - 1, 0, b.chans - 1); const anchor = new THREE.Vector3((bx.min.x + bx.max.x) / 2, bx.max.y + 0.9, view.layout === 'side' ? (bx.min.z + bx.max.z) / 2 : bx.max.z); anchor.project(camera);
       const vis = anchor.z < 1; el.style.display = vis ? '' : 'none';
-      el.style.left = ((anchor.x + 1) / 2 * rect.width) + 'px'; el.style.top = ((1 - anchor.y) / 2 * rect.height) + 'px'; });
+      const x = (anchor.x + 1) / 2 * rect.width, y = (1 - anchor.y) / 2 * rect.height;
+      el.style.left = x + 'px'; el.style.top = y + 'px'; if (vis) shown.push({ el, x, y, z: anchor.z }); });
+    if (declutter) { // nearest labels first; a label that would overlap one already placed is hidden (hovering still names its block)
+      shown.sort((a, b) => a.z - b.z); const sizes = shown.map((s) => [s.el.offsetWidth, s.el.offsetHeight]), placed = [];
+      shown.forEach((s, i) => { const [w, h] = sizes[i], box = [s.x - w / 2 - 3, s.y - h - 2, s.x + w / 2 + 3, s.y + 2];
+        const hit = placed.some((p) => box[0] < p[2] && box[2] > p[0] && box[1] < p[3] && box[3] > p[1]); if (hit) s.el.style.display = 'none'; else placed.push(box); });
+    }
     for (const [id, el] of labelEls) { const b = blockById(id); if (!b || !b.label) { el.remove(); labelEls.delete(id); } }
   }
 
