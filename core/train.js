@@ -93,6 +93,33 @@ export function lossAndGrad(weights, input, label, { poolMode = 'max' } = {}) {
   };
 }
 
+/**
+ * Where the gradient at one activation cell was computed from: the cells of the later gradient maps it is a sum
+ * over, stage by stage up to the scores. It is the backward pass's mirror of the receptive field: a receptive field
+ * grows towards the input, this grows towards the loss. probe { stage, r, c, ch } with stage conv1, pool1, conv2,
+ * pool2, gap (r, c unused, ch the average) or scores (c the class). Returns { stage: { rect: [r0, r1, c0, c1],
+ * chs } } as footprint() in core/cnn.js does; chs null means every channel. Stride 1, padding 1, 2×2 pools.
+ * Whether a conv cell actually received anything (it was the pool's maximum, its ReLU was on) is a matter of the
+ * values, not of the wiring; this gives the wiring.
+ */
+export function gradFootprint(probe, S) {
+  const R = {}; if (!probe) return R;
+  const { Q } = S, NC = S.prob.length, cl = (v, n) => Math.max(0, Math.min(n - 1, v));
+  let st = probe.stage, chs = probe.ch == null ? null : new Set([probe.ch]);
+  let rect = st === 'gap' ? [0, 0, 0, 0] : st === 'scores' ? [0, 0, probe.c, probe.c] : [probe.r, probe.r, probe.c, probe.c];
+  R[st] = { rect, chs };
+  const next = { conv1: 'pool1', pool1: 'conv2', conv2: 'pool2', pool2: 'gap', gap: 'scores' };
+  while (next[st]) {
+    const [r0, r1, c0, c1] = rect;
+    if (st === 'conv1' || st === 'conv2') rect = [r0 >> 1, r1 >> 1, c0 >> 1, c1 >> 1]; // the pooled cell it fed, same channel
+    else if (st === 'pool1') { rect = [cl(r0 - 1, Q), cl(r1 + 1, Q), cl(c0 - 1, Q), cl(c1 + 1, Q)]; chs = null; } // the 3×3 window of every conv-2 map
+    else if (st === 'pool2') rect = [0, 0, 0, 0]; // its channel's average
+    else { rect = [0, 0, 0, NC - 1]; chs = null; } // gap: every score
+    st = next[st]; R[st] = { rect, chs };
+  }
+  return R;
+}
+
 /** Element-wise mean of a list of gradient sets. */
 export function averageGrads(list) {
   const n = list.length;

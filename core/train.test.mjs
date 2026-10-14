@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { parseMnist16, image } from './data.js';
-import { mulberry32, initWeights, crossEntropy, lossAndGrad, sgdStep, averageGrads, predict, accuracy, shuffledOrder } from './train.js';
+import { mulberry32, initWeights, crossEntropy, lossAndGrad, sgdStep, averageGrads, predict, accuracy, shuffledOrder, gradFootprint } from './train.js';
 const assert = (c, m) => { if (!c) throw new Error(m); };
 
 // ---- gradients against central finite differences, on a small random instance (8×8 input) ----
@@ -78,4 +78,27 @@ const data = parseMnist16(readFileSync(new URL('../data/mnist16.bin', import.met
   const p = predict(w, image(data.test, 0));
   assert(p.prob.length === 10 && p.argmax === p.prob.indexOf(Math.max(...p.prob)), 'predict');
 }
+// ---- gradFootprint: the wiring of the backward pass, checked against the gradients themselves ----
+{
+  const { S, back } = lossAndGrad(w0, input, label);
+  const fp = gradFootprint({ stage: 'conv1', r: 5, c: 6, ch: 2 }, S);
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  assert(same(fp.pool1.rect, [2, 2, 3, 3]) && same([...fp.pool1.chs], [2]), 'conv1 → its pooled cell');
+  assert(same(fp.conv2.rect, [1, 3, 2, 3]) && fp.conv2.chs === null, 'pool1 → 3×3 window of every conv-2 map (clipped at the 4×4 edge)');
+  assert(same(fp.pool2.rect, [0, 1, 1, 1]) && fp.pool2.chs === null && same(fp.gap.rect, [0, 0, 0, 0]) && same(fp.scores.rect, [0, 0, 0, 9]), 'on to the scores');
+  assert(same(gradFootprint({ stage: 'gap', ch: 3 }, S).scores.rect, [0, 0, 0, 9]) && same(gradFootprint({ stage: 'scores', c: 4 }, S).scores.rect, [0, 0, 4, 4]), 'head probes');
+  // the window is the whole story: ∂L/∂pool1 at (i, j) recomputed from the conv-2 gradients inside the footprint only
+  const Q = S.Q; let checked = 0;
+  for (const [s, i, j] of [[0, 0, 0], [1, 2, 3], [3, Q - 1, Q - 1], [2, 1, Q - 1]]) {
+    const R = gradFootprint({ stage: 'pool1', r: i, c: j, ch: s }, S), [r0, r1, c0, c1] = R.conv2.rect; let v = 0;
+    for (let k = 0; k < w0.l2.length; k++) for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) {
+      const r = i - a + 1, c = j - b + 1; if (r < 0 || c < 0 || r >= Q || c >= Q) continue;
+      assert(r >= r0 && r <= r1 && c >= c0 && c <= c1, 'a contributing conv-2 cell lies inside the footprint');
+      v += w0.l2[k][s][a * 3 + b] * back.conv2[k][r * Q + c];
+    }
+    assert(Math.abs(v - back.pool1[s][i * Q + j]) < 1e-6 * (1 + Math.abs(v)), `∂L/∂pool1[${s}](${i},${j}) from its footprint: ${v} vs ${back.pool1[s][i * Q + j]}`); checked++; // float32 storage
+  }
+  console.log(`gradFootprint: wiring and ${checked} pool-1 gradients recomputed from their footprint`);
+}
+
 console.log('core/train.js OK');
