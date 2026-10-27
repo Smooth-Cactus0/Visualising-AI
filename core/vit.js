@@ -215,3 +215,78 @@ export function accuracy(w, set, indices, opts) {
   for (const i of indices) if (predict(w, image(set, i), opts).argmax === set.labels[i]) ok++;
   return ok / indices.length;
 }
+
+/**
+ * The green: for a hovered value probe { t, r, c } (t a SHAPES key), a strength from 0 to 1 for every cell it is
+ * computed from, as { key: Float32Array(rows × cols) }; keys with nothing lit are absent. The hovered cell is 1.
+ * Before attention a value is computed from its own token only: 1 for those cells, 0 elsewhere. After attention the
+ * hovered token's own row and patch are 1 and every other token j gets 0.9 · A[i][j] / (largest A[i][k], k ≠ i): a
+ * head's output follows that head's map, values after the heads are joined follow the mean of the two. An attention
+ * weight A[i][j] lights query i and key j in full and every other key at 0.2, since the softmax divides by all of
+ * them. A weight lights the column it reads and the column it makes. The head shows only its direct links.
+ */
+export function vitTrace(S, probe) {
+  const out = {};
+  if (!probe) return out;
+  const put = (key, r, c, s) => {
+    const [, C] = SHAPES[key], a = out[key] || (out[key] = new Float32Array(SHAPES[key][0] * C));
+    if (s > a[r * C + c]) a[r * C + c] = s;
+  };
+  const row = (key, r, s, c0 = 0, c1 = SHAPES[key][1] - 1) => { for (let c = c0; c <= c1; c++) put(key, r, c, s); };
+  const col = (key, c, s) => { for (let r = 0; r < SHAPES[key][0]; r++) put(key, r, c, s); };
+  const block = (j, s) => { for (let a = 0; a < P; a++) for (let b = 0; b < P; b++) put('digit', (j >> 2) * P + a, (j & 3) * P + b, s); };
+  const token = (j, s) => { block(j, s); row('xp', j, s); row('pos', j, s); row('z0', j, s); row('h1', j, s); };
+  const grades = (i, A) => {
+    let m = 0; A[i].forEach((a, j) => { if (j !== i && a > m) m = a; });
+    return A[i].map((a, j) => (j === i ? 1 : m > 0 ? 0.9 * a / m : 0));
+  };
+  const attended = (i, h) => { // h: one head, or null for the mean of both
+    const A = h == null ? S.att[0].map((r, a) => r.map((x, b) => S.att.reduce((t, M) => t + M[a][b], 0) / H)) : S.att[h];
+    const gr = grades(i, A);
+    for (const hh of h == null ? [0, 1] : [h]) {
+      const c0 = hh * DH, c1 = c0 + DH - 1;
+      row('att' + hh, i, 1); row('q', i, 1, c0, c1);
+      gr.forEach((s, j) => { row('k', j, s, c0, c1); row('v', j, s, c0, c1); });
+    }
+    gr.forEach((s, j) => token(j, s));
+  };
+  const { t, r, c } = probe;
+  put(t, r, c, 1);
+  switch (t) {
+    case 'xp': block(r, 1); row('Wp', c, 1); put('bp', 0, c, 1); break;
+    case 'z0': block(r, 1); put('xp', r, c, 1); put('pos', r, c, 1); row('Wp', c, 1); put('bp', 0, c, 1); break;
+    case 'h1': token(r, 1); col('ln1', c, 1); break;
+    case 'q': case 'k': case 'v': token(r, 1); col('W' + t, c, 1); put('b' + t, 0, c, 1); break;
+    case 'att0': case 'att1': {
+      const h = +t[3], c0 = h * DH, c1 = c0 + DH - 1;
+      for (let j = 0; j < T; j++) { row('k', j, j === c ? 1 : 0.2, c0, c1); token(j, j === r || j === c ? 1 : 0.2); }
+      row('q', r, 1, c0, c1); break;
+    }
+    case 'o': attended(r, Math.floor(c / DH)); break;
+    case 'z1': attended(r, null); row('o', r, 1); col('Wo', c, 1); put('bo', 0, c, 1); break;
+    case 'h2': attended(r, null); row('o', r, 1); row('z1', r, 1); col('ln2', c, 1); break;
+    case 'hid': attended(r, null); row('o', r, 1); row('z1', r, 1); row('h2', r, 1); col('W1', c, 1); put('b1', 0, c, 1); break;
+    case 'z2': attended(r, null); row('o', r, 1); row('z1', r, 1); row('h2', r, 1); row('hid', r, 1); col('W2', c, 1); put('b2', 0, c, 1); break;
+    case 'avg': col('z2', c, 1); break;
+    case 'avgNorm': row('avg', 0, 1); col('lnf', c, 1); break;
+    case 'prob': row('avgNorm', 0, 1); col('Wh', c, 1); put('bh', 0, c, 1); break;
+    case 'Wp': for (let j = 0; j < T; j++) put('digit', (j >> 2) * P + (c >> 2), (j & 3) * P + (c & 3), 1); col('xp', r, 1); break;
+    case 'bp': col('xp', c, 1); break;
+    case 'pos': put('z0', r, c, 1); break;
+    case 'ln1': col('h1', c, 1); break;
+    case 'ln2': col('h2', c, 1); break;
+    case 'lnf': put('avgNorm', 0, c, 1); break;
+    case 'Wq': case 'Wk': case 'Wv': col('h1', r, 1); col(t[1], c, 1); break;
+    case 'bq': case 'bk': case 'bv': col(t[1], c, 1); break;
+    case 'Wo': col('o', r, 1); col('z1', c, 1); break;
+    case 'bo': col('z1', c, 1); break;
+    case 'W1': col('h2', r, 1); col('hid', c, 1); break;
+    case 'b1': col('hid', c, 1); break;
+    case 'W2': col('hid', r, 1); col('z2', c, 1); break;
+    case 'b2': col('z2', c, 1); break;
+    case 'Wh': put('avgNorm', 0, r, 1); put('prob', 0, c, 1); break;
+    case 'bh': put('prob', 0, c, 1); break;
+    default: break; // digit: the input itself
+  }
+  return out;
+}
