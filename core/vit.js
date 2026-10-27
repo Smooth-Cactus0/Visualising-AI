@@ -1,0 +1,217 @@
+// core/vit.js — the toy Vision Transformer: forward pass, backward pass, updates and the green trace. Pure, no DOM.
+// 16×16 digit → 16 patches of 4×4 → 8 numbers each, plus position → one encoder block (LayerNorm, 2 heads of 4,
+// Wo, residual; LayerNorm, MLP 8 → 32 → 8 with GELU, residual) → average of the 16 tokens → LayerNorm → 10 classes.
+// A token is a row and matrices are (in × out), so q = h · Wq + bq. The patch kernels Wp are stored as 8 rows of 16
+// (kernel d = row d), like the CNN's bank. Token i is patch i, in reading order.
+import { mulberry32 } from './train.js';
+import { image } from './data.js';
+
+export const N = 16, P = 4, T = 16, D = 8, H = 2, DH = 4, HID = 32, NC = 10;
+
+/** Rows × columns of every tensor the page draws, by key. Weights come with their biases (1 row) and LayerNorm
+ *  parameters (row 0 scale, row 1 shift). */
+export const SHAPES = {
+  digit: [N, N], xp: [T, D], z0: [T, D], h1: [T, D], q: [T, D], k: [T, D], v: [T, D], att0: [T, T], att1: [T, T],
+  o: [T, D], z1: [T, D], h2: [T, D], hid: [T, HID], z2: [T, D], avg: [1, D], avgNorm: [1, D], prob: [1, NC],
+  Wp: [D, P * P], bp: [1, D], pos: [T, D], ln1: [2, D], Wq: [D, D], bq: [1, D], Wk: [D, D], bk: [1, D], Wv: [D, D], bv: [1, D],
+  Wo: [D, D], bo: [1, D], ln2: [2, D], W1: [D, HID], b1: [1, HID], W2: [HID, D], b2: [1, D], lnf: [2, D], Wh: [D, NC], bh: [1, NC],
+};
+
+const dot = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s; };
+const zeros = (r, c) => Array.from({ length: r }, () => new Array(c).fill(0));
+/** X (n×a) · W (a×b) + bias (b). */
+function linear(X, W, b) {
+  return X.map((x) => b.map((bc, c) => { let s = bc; for (let a = 0; a < x.length; a++) s += x[a] * W[a][c]; return s; }));
+}
+export function softmax(v) { const m = Math.max(...v); const e = v.map((x) => Math.exp(x - m)); const s = e.reduce((t, x) => t + x, 0); return e.map((x) => x / s); }
+const EPS = 1e-5;
+function layerNorm(x, { g, b }) {
+  const n = x.length, mean = x.reduce((t, v) => t + v, 0) / n, vr = x.reduce((t, v) => t + (v - mean) ** 2, 0) / n;
+  const rstd = 1 / Math.sqrt(vr + EPS), xhat = x.map((v) => (v - mean) * rstd);
+  return { y: xhat.map((v, d) => g[d] * v + b[d]), xhat, rstd };
+}
+const K0 = Math.sqrt(2 / Math.PI);
+/** GELU in its tanh form. */
+export const gelu = (x) => 0.5 * x * (1 + Math.tanh(K0 * (x + 0.044715 * x ** 3)));
+function geluGrad(x) { const t = Math.tanh(K0 * (x + 0.044715 * x ** 3)); return 0.5 * (1 + t) + 0.5 * x * (1 - t * t) * K0 * (1 + 3 * 0.044715 * x * x); }
+
+/** The digit cut into 16 patches of 16 pixels (row-major inside the patch). order[s] is the patch placed in slot s. */
+export function patchify(img, order = null) {
+  return Array.from({ length: T }, (_, s) => {
+    const p = order ? order[s] : s, pr = p >> 2, pc = p & 3, out = new Array(P * P);
+    for (let a = 0; a < P; a++) for (let b = 0; b < P; b++) out[a * P + b] = img[(pr * P + a) * N + pc * P + b];
+    return out;
+  });
+}
+/** The 16×16 picture the model sees: slot s drawn at block s. */
+function unpatch(patches) {
+  const img = zeros(N, N);
+  patches.forEach((px, s) => { for (let a = 0; a < P; a++) for (let b = 0; b < P; b++) img[(s >> 2) * P + a][(s & 3) * P + b] = px[a * P + b]; });
+  return img;
+}
+
+/** Seeded starting weights: matrices uniform ±√(6/(fan_in + fan_out)) (Glorot), position ±0.1, LayerNorm scale 1 and
+ *  shift 0, biases 0. */
+export function init(seed = 1) {
+  const rnd = mulberry32(seed);
+  const mat = (r, c, s) => Array.from({ length: r }, () => Array.from({ length: c }, () => (rnd() * 2 - 1) * s));
+  const glorot = (a, b) => mat(a, b, Math.sqrt(6 / (a + b)));
+  const zero = (n) => new Array(n).fill(0), ln = () => ({ g: new Array(D).fill(1), b: zero(D) });
+  return {
+    Wp: mat(D, P * P, Math.sqrt(6 / (P * P + D))), bp: zero(D), pos: mat(T, D, 0.1),
+    ln1: ln(), Wq: glorot(D, D), bq: zero(D), Wk: glorot(D, D), bk: zero(D), Wv: glorot(D, D), bv: zero(D), Wo: glorot(D, D), bo: zero(D),
+    ln2: ln(), W1: glorot(D, HID), b1: zero(HID), W2: glorot(HID, D), b2: zero(D),
+    lnf: ln(), Wh: glorot(D, NC), bh: zero(NC),
+  };
+}
+
+/** Every intermediate of one forward pass. position false leaves the position table out; order shuffles the patches. */
+export function forward(w, img, { position = true, order = null } = {}) {
+  const patches = patchify(img, order);
+  const xp = patches.map((px) => w.Wp.map((k, d) => dot(px, k) + w.bp[d]));
+  const z0 = xp.map((t, i) => t.map((v, d) => v + (position ? w.pos[i][d] : 0)));
+  const n1 = z0.map((t) => layerNorm(t, w.ln1)), h1 = n1.map((n) => n.y);
+  const q = linear(h1, w.Wq, w.bq), k = linear(h1, w.Wk, w.bk), v = linear(h1, w.Wv, w.bv);
+  const cols = (X, h) => X.map((r) => r.slice(h * DH, h * DH + DH));
+  const scores = [], att = [], heads = [];
+  for (let h = 0; h < H; h++) {
+    const qh = cols(q, h), kh = cols(k, h), vh = cols(v, h);
+    const s = qh.map((qi) => kh.map((kj) => dot(qi, kj) / Math.sqrt(DH)));
+    const a = s.map(softmax);
+    scores.push(s); att.push(a);
+    heads.push(a.map((ai) => Array.from({ length: DH }, (_, c) => ai.reduce((t, aij, j) => t + aij * vh[j][c], 0))));
+  }
+  const o = q.map((_, i) => heads.flatMap((hh) => hh[i]));
+  const mixed = linear(o, w.Wo, w.bo);
+  const z1 = z0.map((t, i) => t.map((x, d) => x + mixed[i][d]));
+  const n2 = z1.map((t) => layerNorm(t, w.ln2)), h2 = n2.map((n) => n.y);
+  const pre = linear(h2, w.W1, w.b1), hid = pre.map((r) => r.map(gelu));
+  const mlp = linear(hid, w.W2, w.b2);
+  const z2 = z1.map((t, i) => t.map((x, d) => x + mlp[i][d]));
+  const avg = Array.from({ length: D }, (_, d) => z2.reduce((t, r) => t + r[d], 0) / T);
+  const nf = layerNorm(avg, w.lnf), avgNorm = nf.y;
+  const logits = w.bh.map((b, c) => avgNorm.reduce((t, x, d) => t + x * w.Wh[d][c], b));
+  const prob = softmax(logits);
+  return { img: unpatch(patches), patches, xp, z0, n1, h1, q, k, v, scores, att, heads, o, mixed, z1, n2, h2, pre, hid, mlp, z2, avg, nf, avgNorm, logits, prob, position, order };
+}
+
+/** Any drawn tensor as rows of numbers, by its SHAPES key. */
+export function tensor(key, S, w) {
+  switch (key) {
+    case 'digit': return S.img;
+    case 'att0': return S.att[0];
+    case 'att1': return S.att[1];
+    case 'avg': case 'avgNorm': case 'prob': return [S[key]];
+    case 'ln1': case 'ln2': case 'lnf': return [w[key].g, w[key].b];
+    case 'bp': case 'bq': case 'bk': case 'bv': case 'bo': case 'b1': case 'b2': case 'bh': return [w[key]];
+    default: return key in w ? w[key] : S[key];
+  }
+}
+
+/** A structure shaped like t (nested arrays and objects of numbers), each number replaced by fn(that number, the
+ *  numbers at the same place in more...). */
+function zipTree(fn, t, ...more) {
+  if (typeof t === 'number') return fn(t, ...more);
+  if (Array.isArray(t)) return t.map((x, i) => zipTree(fn, x, ...more.map((m) => m[i])));
+  return Object.fromEntries(Object.keys(t).map((key) => [key, zipTree(fn, t[key], ...more.map((m) => m[key]))]));
+}
+export function paramCount(w) { let n = 0; zipTree(() => { n++; return 0; }, w); return n; }
+/** True when o has exactly the structure of the model's weights, with finite numbers. */
+export function isWeights(o) {
+  const same = (a, b) => typeof a === 'number' ? typeof b === 'number' && Number.isFinite(b)
+    : Array.isArray(a) ? Array.isArray(b) && a.length === b.length && a.every((x, i) => same(x, b[i]))
+      : b != null && typeof b === 'object' && Object.keys(a).every((key) => same(a[key], b[key]));
+  return same(init(1), o);
+}
+
+export const crossEntropy = (prob, label) => -Math.log(Math.max(prob[label], 1e-12));
+/** dL/dx through LayerNorm from dL/dy; adds dL/dscale and dL/dshift into dg, db. */
+function lnBack(dy, { xhat, rstd }, g, dg, db) {
+  const n = dy.length, dxhat = dy.map((v, d) => v * g[d]);
+  let m1 = 0, m2 = 0;
+  for (let d = 0; d < n; d++) { dg[d] += dy[d] * xhat[d]; db[d] += dy[d]; m1 += dxhat[d]; m2 += dxhat[d] * xhat[d]; }
+  m1 /= n; m2 /= n;
+  return dxhat.map((v, d) => rstd * (v - m1 - xhat[d] * m2));
+}
+/** Backward through Y = X · W + b: adds dL/dW and dL/db into dW, db; returns dL/dX. */
+function linearBack(X, W, dY, dW, db) {
+  for (let i = 0; i < X.length; i++) for (let c = 0; c < dY[i].length; c++) {
+    const g = dY[i][c]; if (g === 0) continue;
+    db[c] += g; for (let a = 0; a < X[i].length; a++) dW[a][c] += X[i][a] * g;
+  }
+  return dY.map((dy) => W.map((row) => dot(row, dy)));
+}
+
+/** Loss and the gradient of every weight (same structure as the weights) for one digit. */
+export function lossAndGrad(w, img, label, opts = {}) {
+  const S = forward(w, img, opts), g = zipTree(() => 0, w);
+  const loss = crossEntropy(S.prob, label);
+  const dLogits = S.prob.map((p, c) => p - (c === label ? 1 : 0));
+  // head: average → LayerNorm → W_head
+  const [dAvgNorm] = linearBack([S.avgNorm], w.Wh, [dLogits], g.Wh, g.bh);
+  const dAvg = lnBack(dAvgNorm, S.nf, w.lnf.g, g.lnf.g, g.lnf.b);
+  const dZ2 = Array.from({ length: T }, () => dAvg.map((x) => x / T));
+  // MLP and its residual
+  const dHid = linearBack(S.hid, w.W2, dZ2, g.W2, g.b2);
+  const dPre = dHid.map((r, i) => r.map((x, f) => x * geluGrad(S.pre[i][f])));
+  const dH2 = linearBack(S.h2, w.W1, dPre, g.W1, g.b1);
+  const dZ1 = dZ2.map((r, i) => { const dx = lnBack(dH2[i], S.n2[i], w.ln2.g, g.ln2.g, g.ln2.b); return r.map((x, d) => x + dx[d]); });
+  // attention and its residual
+  const dO = linearBack(S.o, w.Wo, dZ1, g.Wo, g.bo);
+  const dQ = zeros(T, D), dK = zeros(T, D), dV = zeros(T, D), sc = 1 / Math.sqrt(DH);
+  for (let h = 0; h < H; h++) {
+    const A = S.att[h], off = h * DH;
+    for (let i = 0; i < T; i++) {
+      const dA = new Array(T);
+      for (let j = 0; j < T; j++) {
+        let s = 0;
+        for (let c = 0; c < DH; c++) { s += dO[i][off + c] * S.v[j][off + c]; dV[j][off + c] += A[i][j] * dO[i][off + c]; }
+        dA[j] = s;
+      }
+      const m = A[i].reduce((t, a, j) => t + a * dA[j], 0);
+      for (let j = 0; j < T; j++) {
+        const dS = A[i][j] * (dA[j] - m) * sc;
+        for (let c = 0; c < DH; c++) { dQ[i][off + c] += dS * S.k[j][off + c]; dK[j][off + c] += dS * S.q[i][off + c]; }
+      }
+    }
+  }
+  const dHq = linearBack(S.h1, w.Wq, dQ, g.Wq, g.bq), dHk = linearBack(S.h1, w.Wk, dK, g.Wk, g.bk), dHv = linearBack(S.h1, w.Wv, dV, g.Wv, g.bv);
+  const dZ0 = dZ1.map((r, i) => {
+    const dx = lnBack(dHq[i].map((x, d) => x + dHk[i][d] + dHv[i][d]), S.n1[i], w.ln1.g, g.ln1.g, g.ln1.b);
+    return r.map((x, d) => x + dx[d]);
+  });
+  // position and patch embedding
+  if (S.position) dZ0.forEach((r, i) => r.forEach((x, d) => { g.pos[i][d] += x; }));
+  for (let p = 0; p < T; p++) for (let d = 0; d < D; d++) {
+    const x = dZ0[p][d]; g.bp[d] += x;
+    for (let q2 = 0; q2 < P * P; q2++) g.Wp[d][q2] += x * S.patches[p][q2];
+  }
+  return { S, loss, grads: g };
+}
+
+/** One SGD step, w − lr · g, as fresh arrays. */
+export function sgdStep(w, g, lr) { return zipTree((x, gx) => x - lr * gx, w, g); }
+export function adamInit(w) { return { t: 0, m: zipTree(() => 0, w), v: zipTree(() => 0, w) }; }
+/** One Adam step; returns the new weights and optimiser state. */
+export function adamStep(w, g, st, lr, b1 = 0.9, b2 = 0.999, eps = 1e-8) {
+  const t = st.t + 1;
+  const m = zipTree((mx, gx) => b1 * mx + (1 - b1) * gx, st.m, g);
+  const v = zipTree((vx, gx) => b2 * vx + (1 - b2) * gx * gx, st.v, g);
+  const c1 = 1 - b1 ** t, c2 = 1 - b2 ** t;
+  return { w: zipTree((x, mx, vx) => x - lr * (mx / c1) / (Math.sqrt(vx / c2) + eps), w, m, v), state: { t, m, v } };
+}
+/** Element-wise mean of a list of gradient sets. */
+export function averageGrads(list) { return zipTree((...xs) => xs.reduce((a, b) => a + b, 0) / xs.length, ...list); }
+
+/** Class probabilities and the top class for one digit. */
+export function predict(w, img, opts) {
+  const { prob } = forward(w, img, opts);
+  let argmax = 0; for (let c = 1; c < NC; c++) if (prob[c] > prob[argmax]) argmax = c;
+  return { prob, argmax };
+}
+/** Fraction of the given digits of a set that the weights classify correctly. */
+export function accuracy(w, set, indices, opts) {
+  let ok = 0;
+  for (const i of indices) if (predict(w, image(set, i), opts).argmax === set.labels[i]) ok++;
+  return ok / indices.length;
+}
