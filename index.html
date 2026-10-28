@@ -135,12 +135,12 @@ footer p{margin:0 0 6px;max-width:90ch}
 <header>
   <h1>Visualising AI</h1>
   <p class="lede">Interactive explorers for deep-learning architectures. Each one takes the boxes of an architecture diagram and shows what they <b>compute</b>: every cell, kernel, weight and gradient can be hovered, and the arithmetic is written out. The networks are small on purpose, so that every number fits on screen.</p>
-  <p class="lede">The convolutional network is built, and the Vision Transformer has its explorer. Next: the Vision Transformer's training page, then U-Net, CoAtNet and ConvNeXt.</p>
+  <p class="lede">The convolutional network and the Vision Transformer are built, each with an explorer and a training page. Next: U-Net, CoAtNet and ConvNeXt.</p>
 </header>
 
 <nav class="archs" aria-label="Architectures">
   <a href="#cnn">CNN <span class="badge live">3 pages</span></a>
-  <a href="#vit">Vision Transformer <span class="badge live">1 page</span></a>
+  <a href="#vit">Vision Transformer <span class="badge live">2 pages</span></a>
   <a href="#unet">U-Net <span class="badge planned">planned</span></a>
   <a href="#coatnet">CoAtNet <span class="badge planned">planned</span></a>
   <a href="#convnext">ConvNeXt <span class="badge planned">planned</span></a>
@@ -178,14 +178,16 @@ footer p{margin:0 0 6px;max-width:90ch}
   <div class="fig"><svg data-arch="vit" viewBox="0 0 440 150" role="img" aria-label="An image cut into 16 patches becomes a row of tokens; in the encoder every token attends to every other; the tokens are averaged and give 10 class probabilities."></svg>
     <div class="cap">Patches → tokens → attention, every token to every other → average → 10 classes. One token's attention in green.</div></div>
   <div>
-    <div class="head"><span class="num">02</span><h2>Vision Transformer (ViT)</h2><span class="badge live">1 page</span></div>
+    <div class="head"><span class="num">02</span><h2>Vision Transformer (ViT)</h2><span class="badge live">2 pages</span></div>
     <p class="def">Cut the image into patches, turn each patch into a vector called a token, and let every token look at every other one through attention.</p>
     <p class="why">Where a convolution's view grows a few pixels per layer, attention sees the whole image from the first layer and learns where to look. The price: its cost grows with the square of the number of patches, which is why patches are large.</p>
     <p class="builds">Builds on the CNN pages: stride, kernels, softmax.</p>
   </div>
-    <div class="cards one">
+    <div class="cards">
       <a class="card" href="vit/"><b><svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><g class="k-act"><rect class="f" x="2" y="2" width="22" height="22" rx="2"/></g><rect x="13" y="7.5" width="5.5" height="5.5" fill="var(--hl2)"/><rect x="7.5" y="2" width="5.5" height="5.5" fill="var(--hl2)" opacity=".55"/><rect x="2" y="18.5" width="5.5" height="5.5" fill="var(--hl2)" opacity=".3"/><path class="grid" d="M7.5 2v22M13 2v22M18.5 2v22M2 7.5h22M2 13h22M2 18.5h22"/></svg>Explorer</b>
         <span>Patches become tokens, position is added, one attention head is written out score by score, then the MLP, the residuals and the average. Trained weights; hover any value to see what it reads.</span><em>Open →</em></a>
+      <a class="card" href="vit-train/"><b><svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><path d="M3 4C7 5 8 15 12 17S20 20 23 21" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round"/><path d="M3 23H23M3 3V23" stroke="var(--ink2)" stroke-width="1.2" fill="none"/></svg>Training</b>
+        <span>One step in full, the backward pass through attention a stage at a time, then thousands of steps; then a race against the CNN on 100 to 3,000 digits, where the CNN's locality wins when data is scarce.</span><em>Open →</em></a>
     </div>
 </section>
 
