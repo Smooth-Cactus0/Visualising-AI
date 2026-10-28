@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { parseMnist16, image } from './data.js';
 import { shuffledOrder } from './train.js';
-import { N, P, T, D, H, DH, HID, NC, SHAPES, init, forward, tensor, paramCount, isWeights, crossEntropy, lossAndGrad, sgdStep, adamInit, adamStep, averageGrads, predict, accuracy, vitTrace } from './vit.js';
+import { N, P, T, D, H, DH, HID, NC, SHAPES, init, forward, tensor, paramCount, isWeights, crossEntropy, lossAndGrad, sgdStep, adamInit, adamStep, averageGrads, predict, accuracy, vitTrace, gradTrace, ACTIVATIONS, WEIGHT_KEYS, BACK_STAGES } from './vit.js';
 const assert = (c, m) => { if (!c) throw new Error(m); };
 const close = (a, b, tol, m) => assert(Math.abs(a - b) <= tol, `${m}: ${a} vs ${b}`);
 
@@ -125,4 +125,57 @@ for (const opts of [{}, { position: false, order: perm }]) {
   console.log('vitTrace: before attention, one head, both heads, attention weight, head, weights ok');
 }
 
+// ---- back: the gradient of every drawn activation, against central finite differences (nudging that activation) ----
+{
+  const { back } = lossAndGrad(w, img, label);
+  const at = (M, r, c) => (Array.isArray(M[0]) ? M[r][c] : M[c]);
+  let worst = 0, n = 0;
+  for (const key of ACTIVATIONS.filter((key) => key !== 'digit')) {
+    const [R, C] = SHAPES[key], M = back[key];
+    assert(Array.isArray(M) && (R === 1 ? M.length === C : M.length === R && M[0].length === C), `back.${key} is ${R}×${C}`);
+    const t = key === 'prob' ? 'logits' : key; // ∂L/∂(scores) is drawn under the probabilities
+    for (const [r, c] of [[0, 0], [R - 1, C - 1], [R >> 1, C >> 1]]) {
+      const h = 1e-5, lossAt = (by) => crossEntropy(forward(w, img, { nudge: { t, r, c, by } }).prob, label);
+      const num = (lossAt(h) - lossAt(-h)) / (2 * h), ana = at(M, r, c), err = Math.abs(num - ana) / (1 + Math.abs(ana));
+      assert(err < 1e-5, `back.${key}[${r}][${c}]: numeric ${num} vs analytic ${ana}`);
+      worst = Math.max(worst, err); n++;
+    }
+  }
+  const unions = (pick) => BACK_STAGES.flatMap(pick).sort().join();
+  assert(unions((s) => s.act) === ACTIVATIONS.filter((key) => key !== 'digit').sort().join(), 'BACK_STAGES covers every activation but the digit');
+  assert(unions((s) => s.w) === [...WEIGHT_KEYS].sort().join(), 'BACK_STAGES covers every weight');
+  console.log(`back: ${n} cells of ${ACTIVATIONS.length - 1} activation gradients against finite differences, max normalised error ${worst.toExponential(2)}`);
+}
+
+// ---- gradTrace: the backward green ----
+{
+  const at = (tr, key, r, c) => (tr[key] ? tr[key][r * (SHAPES[key] || SHAPES[key.slice(1)])[1] + c] : 0);
+  // a value's gradient collects from the queries that read it: column 4 of head 1's map, graded
+  const tv = gradTrace(S, { t: 'dv', r: 4, c: 1 }), A = S.att[0];
+  let m = 0; A.forEach((row, i) => { if (i !== 4 && row[4] > m) m = row[4]; });
+  for (let i = 0; i < T; i++) {
+    const want = i === 4 ? 1 : 0.9 * A[i][4] / m;
+    close(at(tv, 'do', i, 1), want, 1e-6, `dv probe: query ${i} strength`);
+    close(at(tv, 'att0', i, 4), want, 1e-6, `dv probe: map column 4, row ${i}`);
+    assert(at(tv, 'do', i, 5) === 0, 'dv probe: the other head is not lit');
+  }
+  close(Math.max(...[...Array(T).keys()].filter((i) => i !== 4).map((i) => at(tv, 'do', i, 1))), Math.fround(0.9), 1e-7, 'dv probe: most-reading query at 0.9');
+  assert(at(tv, 'dprob', 0, 3) > 0 && !tv.dq && !tv.dh1, 'dv probe: up to the loss, nothing upstream');
+  // a query's gradient comes from its own row of ∂L/∂A
+  const tq = gradTrace(S, { t: 'dq', r: 3, c: 6 });
+  assert([...Array(T).keys()].every((j) => at(tq, 'datt1', 3, j) === 1 && at(tq, 'datt1', 2, j) === 0) && !tq.datt0, 'dq probe: its row of ∂L/∂A, its head');
+  // before attention's backward step, per token: z₂ reads the average's same column, and the head
+  const tz = gradTrace(S, { t: 'dz2', r: 2, c: 5 });
+  assert(at(tz, 'davg', 0, 5) === 1 && at(tz, 'davg', 0, 4) === 0 && at(tz, 'dprob', 0, 9) === 1 && !tz.dz1 && !tz.dhid, 'dz2 probe');
+  const th = gradTrace(S, { t: 'dhid', r: 7, c: 30 });
+  assert(at(th, 'dz2', 7, 0) === 1 && at(th, 'dz2', 6, 0) === 0 && at(th, 'W2', 30, 3) === 1 && at(th, 'W2', 29, 3) === 0, 'dhid probe');
+  // a weight: all three rows, the input column it reads and the gradient column it feeds
+  const tw = gradTrace(S, { t: 'dWo', r: 2, c: 5 });
+  assert(['Wo', 'dWo', 'nWo'].every((key) => at(tw, key, 2, 5) === 1 && at(tw, key, 2, 4) === 0), 'weight probe: three rows');
+  assert([...Array(T).keys()].every((i) => at(tw, 'o', i, 2) === 1 && at(tw, 'o', i, 3) === 0 && at(tw, 'dz1', i, 5) === 1 && at(tw, 'dz1', i, 4) === 0), 'weight probe: input and gradient columns');
+  const tp = gradTrace(S, { t: 'nWp', r: 6, c: 5 });
+  assert(at(tp, 'digit', 1, 1) === 1 && at(tp, 'digit', 5, 13) === 1 && at(tp, 'digit', 0, 0) === 0 && at(tp, 'dxp', 9, 6) === 1, 'patch-kernel probe');
+  assert(Object.keys(gradTrace(S, { t: 'z1', r: 0, c: 0 })).length === 0 && Object.keys(gradTrace(S, null)).length === 0, 'forward activations and no probe: nothing');
+  console.log('gradTrace: value, query, z2, hidden and weight probes ok');
+}
 console.log('core/vit.test.mjs: all checks passed');

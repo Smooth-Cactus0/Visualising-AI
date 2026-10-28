@@ -65,32 +65,35 @@ export function init(seed = 1) {
   };
 }
 
-/** Every intermediate of one forward pass. position false leaves the position table out; order shuffles the patches. */
-export function forward(w, img, { position = true, order = null } = {}) {
+/** Every intermediate of one forward pass. position false leaves the position table out; order shuffles the patches.
+ *  nudge { t, r, c, by } adds `by` to one cell of an activation as soon as it is computed (t a SHAPES activation key,
+ *  or 'logits'); the tests use it to check each activation's gradient against finite differences. */
+export function forward(w, img, { position = true, order = null, nudge = null } = {}) {
+  const bump = (key, M) => { if (nudge && nudge.t === key) { if (Array.isArray(M[0])) M[nudge.r][nudge.c] += nudge.by; else M[nudge.c] += nudge.by; } return M; };
   const patches = patchify(img, order);
-  const xp = patches.map((px) => w.Wp.map((k, d) => dot(px, k) + w.bp[d]));
-  const z0 = xp.map((t, i) => t.map((v, d) => v + (position ? w.pos[i][d] : 0)));
-  const n1 = z0.map((t) => layerNorm(t, w.ln1)), h1 = n1.map((n) => n.y);
-  const q = linear(h1, w.Wq, w.bq), k = linear(h1, w.Wk, w.bk), v = linear(h1, w.Wv, w.bv);
+  const xp = bump('xp', patches.map((px) => w.Wp.map((k, d) => dot(px, k) + w.bp[d])));
+  const z0 = bump('z0', xp.map((t, i) => t.map((v, d) => v + (position ? w.pos[i][d] : 0))));
+  const n1 = z0.map((t) => layerNorm(t, w.ln1)), h1 = bump('h1', n1.map((n) => n.y));
+  const q = bump('q', linear(h1, w.Wq, w.bq)), k = bump('k', linear(h1, w.Wk, w.bk)), v = bump('v', linear(h1, w.Wv, w.bv));
   const cols = (X, h) => X.map((r) => r.slice(h * DH, h * DH + DH));
   const scores = [], att = [], heads = [];
   for (let h = 0; h < H; h++) {
     const qh = cols(q, h), kh = cols(k, h), vh = cols(v, h);
     const s = qh.map((qi) => kh.map((kj) => dot(qi, kj) / Math.sqrt(DH)));
-    const a = s.map(softmax);
+    const a = bump('att' + h, s.map(softmax));
     scores.push(s); att.push(a);
     heads.push(a.map((ai) => Array.from({ length: DH }, (_, c) => ai.reduce((t, aij, j) => t + aij * vh[j][c], 0))));
   }
-  const o = q.map((_, i) => heads.flatMap((hh) => hh[i]));
+  const o = bump('o', q.map((_, i) => heads.flatMap((hh) => hh[i])));
   const mixed = linear(o, w.Wo, w.bo);
-  const z1 = z0.map((t, i) => t.map((x, d) => x + mixed[i][d]));
-  const n2 = z1.map((t) => layerNorm(t, w.ln2)), h2 = n2.map((n) => n.y);
-  const pre = linear(h2, w.W1, w.b1), hid = pre.map((r) => r.map(gelu));
+  const z1 = bump('z1', z0.map((t, i) => t.map((x, d) => x + mixed[i][d])));
+  const n2 = z1.map((t) => layerNorm(t, w.ln2)), h2 = bump('h2', n2.map((n) => n.y));
+  const pre = linear(h2, w.W1, w.b1), hid = bump('hid', pre.map((r) => r.map(gelu)));
   const mlp = linear(hid, w.W2, w.b2);
-  const z2 = z1.map((t, i) => t.map((x, d) => x + mlp[i][d]));
-  const avg = Array.from({ length: D }, (_, d) => z2.reduce((t, r) => t + r[d], 0) / T);
-  const nf = layerNorm(avg, w.lnf), avgNorm = nf.y;
-  const logits = w.bh.map((b, c) => avgNorm.reduce((t, x, d) => t + x * w.Wh[d][c], b));
+  const z2 = bump('z2', z1.map((t, i) => t.map((x, d) => x + mlp[i][d])));
+  const avg = bump('avg', Array.from({ length: D }, (_, d) => z2.reduce((t, r) => t + r[d], 0) / T));
+  const nf = layerNorm(avg, w.lnf), avgNorm = bump('avgNorm', nf.y);
+  const logits = bump('logits', w.bh.map((b, c) => avgNorm.reduce((t, x, d) => t + x * w.Wh[d][c], b)));
   const prob = softmax(logits);
   return { img: unpatch(patches), patches, xp, z0, n1, h1, q, k, v, scores, att, heads, o, mixed, z1, n2, h2, pre, hid, mlp, z2, avg, nf, avgNorm, logits, prob, position, order };
 }
@@ -142,7 +145,8 @@ function linearBack(X, W, dY, dW, db) {
   return dY.map((dy) => W.map((row) => dot(row, dy)));
 }
 
-/** Loss and the gradient of every weight (same structure as the weights) for one digit. */
+/** Loss and the gradient of every weight (same structure as the weights) for one digit, and `back`: the gradient of
+ *  every drawn activation, keyed as SHAPES (`prob` holds ∂L/∂(scores) = p − y, drawn under the probabilities). */
 export function lossAndGrad(w, img, label, opts = {}) {
   const S = forward(w, img, opts), g = zipTree(() => 0, w);
   const loss = crossEntropy(S.prob, label);
@@ -158,11 +162,12 @@ export function lossAndGrad(w, img, label, opts = {}) {
   const dZ1 = dZ2.map((r, i) => { const dx = lnBack(dH2[i], S.n2[i], w.ln2.g, g.ln2.g, g.ln2.b); return r.map((x, d) => x + dx[d]); });
   // attention and its residual
   const dO = linearBack(S.o, w.Wo, dZ1, g.Wo, g.bo);
-  const dQ = zeros(T, D), dK = zeros(T, D), dV = zeros(T, D), sc = 1 / Math.sqrt(DH);
+  const dQ = zeros(T, D), dK = zeros(T, D), dV = zeros(T, D), sc = 1 / Math.sqrt(DH), dAtt = [];
   for (let h = 0; h < H; h++) {
     const A = S.att[h], off = h * DH;
+    dAtt.push([]);
     for (let i = 0; i < T; i++) {
-      const dA = new Array(T);
+      const dA = new Array(T); dAtt[h].push(dA);
       for (let j = 0; j < T; j++) {
         let s = 0;
         for (let c = 0; c < DH; c++) { s += dO[i][off + c] * S.v[j][off + c]; dV[j][off + c] += A[i][j] * dO[i][off + c]; }
@@ -176,17 +181,19 @@ export function lossAndGrad(w, img, label, opts = {}) {
     }
   }
   const dHq = linearBack(S.h1, w.Wq, dQ, g.Wq, g.bq), dHk = linearBack(S.h1, w.Wk, dK, g.Wk, g.bk), dHv = linearBack(S.h1, w.Wv, dV, g.Wv, g.bv);
-  const dZ0 = dZ1.map((r, i) => {
-    const dx = lnBack(dHq[i].map((x, d) => x + dHk[i][d] + dHv[i][d]), S.n1[i], w.ln1.g, g.ln1.g, g.ln1.b);
-    return r.map((x, d) => x + dx[d]);
-  });
+  const dH1 = dHq.map((r, i) => r.map((x, d) => x + dHk[i][d] + dHv[i][d]));
+  const dZ0 = dZ1.map((r, i) => { const dx = lnBack(dH1[i], S.n1[i], w.ln1.g, g.ln1.g, g.ln1.b); return r.map((x, d) => x + dx[d]); });
   // position and patch embedding
   if (S.position) dZ0.forEach((r, i) => r.forEach((x, d) => { g.pos[i][d] += x; }));
   for (let p = 0; p < T; p++) for (let d = 0; d < D; d++) {
     const x = dZ0[p][d]; g.bp[d] += x;
     for (let q2 = 0; q2 < P * P; q2++) g.Wp[d][q2] += x * S.patches[p][q2];
   }
-  return { S, loss, grads: g };
+  const back = {
+    prob: dLogits, avgNorm: dAvgNorm, avg: dAvg, z2: dZ2, hid: dHid, h2: dH2, z1: dZ1, o: dO, att0: dAtt[0], att1: dAtt[1],
+    q: dQ, k: dK, v: dV, h1: dH1, z0: dZ0, xp: dZ0, // z₀ = patch tokens + position, so both get the same gradient
+  };
+  return { S, loss, grads: g, back };
 }
 
 /** One SGD step, w − lr · g, as fresh arrays. */
@@ -287,6 +294,104 @@ export function vitTrace(S, probe) {
     case 'Wh': put('avgNorm', 0, r, 1); put('prob', 0, c, 1); break;
     case 'bh': put('prob', 0, c, 1); break;
     default: break; // digit: the input itself
+  }
+  return out;
+}
+
+
+
+/** The drawn activations, in the order the data flows; every other SHAPES key is a weight. */
+export const ACTIVATIONS = ['digit', 'xp', 'z0', 'h1', 'q', 'k', 'v', 'att0', 'att1', 'o', 'z1', 'h2', 'hid', 'z2', 'avg', 'avgNorm', 'prob'];
+export const WEIGHT_KEYS = Object.keys(SHAPES).filter((key) => !ACTIVATIONS.includes(key));
+
+/** The backward pass in the order the training page reveals it, from the loss towards the input: for each stage, the
+ *  activations whose gradient it computes and the weights whose gradient (and so w′) it computes. */
+export const BACK_STAGES = [
+  { name: 'head', act: ['prob', 'avgNorm', 'avg', 'z2'], w: ['Wh', 'bh', 'lnf'] },
+  { name: 'MLP', act: ['hid', 'h2', 'z1'], w: ['W2', 'b2', 'W1', 'b1', 'ln2'] },
+  { name: 'attention', act: ['o', 'att0', 'att1', 'q', 'k', 'v', 'h1'], w: ['Wo', 'bo', 'Wq', 'bq', 'Wk', 'bk', 'Wv', 'bv'] },
+  { name: 'embedding', act: ['z0', 'xp'], w: ['ln1', 'pos', 'Wp', 'bp'] },
+];
+
+const AFTER = ['o', 'z1', 'h2', 'hid', 'z2']; // per-token activations after attention, in the order the data flows
+const WEIGHT_IO = { Wq: ['h1', 'q'], Wk: ['h1', 'k'], Wv: ['h1', 'v'], Wo: ['o', 'z1'], W1: ['h2', 'hid'], W2: ['hid', 'z2'], Wh: ['avgNorm', 'prob'] };
+const BIAS_OUT = { bp: 'xp', bq: 'q', bk: 'k', bv: 'v', bo: 'z1', b1: 'hid', b2: 'z2', bh: 'prob' };
+const LN_OUT = { ln1: 'h1', ln2: 'h2', lnf: 'avgNorm' };
+
+/**
+ * The backward green. For a hovered gradient probe { t: 'd' + activation key, r, c }: the cells it is computed from,
+ * downstream up to the loss, with a strength from 0 to 1, as { key: Float32Array(rows × cols) }. Keys are namespaced:
+ * 'd' + key for a gradient, a plain key for a forward activation or weight, 'n' + key for an updated weight w′.
+ * Through attention the grading turns over: the gradient of token j's key or value collects from every query i that
+ * read it, so query i gets 1 for i = j and otherwise 0.9 · A[i][j] / (the largest A[k][j], k ≠ j), a column of the map
+ * where the forward green uses a row; values after the heads are joined use the mean of the two maps. For a weight,
+ * plain or with 'd' or 'n' { t, r, c }: the weight in all three rows, the input column it reads in the forward row and
+ * the gradient column it feeds in the backward row, whose products summed over the tokens are its gradient.
+ */
+export function gradTrace(S, probe) {
+  const out = {};
+  if (!probe) return out;
+  const shape = (key) => SHAPES[key] || SHAPES[key.slice(1)];
+  const put = (key, r, c, s) => {
+    const [R, C] = shape(key), a = out[key] || (out[key] = new Float32Array(R * C));
+    if (s > a[r * C + c]) a[r * C + c] = s;
+  };
+  const row = (key, r, s, c0 = 0, c1 = shape(key)[1] - 1) => { for (let c = c0; c <= c1; c++) put(key, r, c, s); };
+  const col = (key, c, s) => { for (let r = 0; r < shape(key)[0]; r++) put(key, r, c, s); };
+  const head = (s) => { row('davg', 0, s); row('davgNorm', 0, s); row('dprob', 0, s); };
+  const tail = (i, from, s) => { for (const key of AFTER.slice(AFTER.indexOf(from) + 1)) row('d' + key, i, s); head(s); };
+  const readers = (j, A) => {
+    let m = 0; A.forEach((r, i) => { if (i !== j && r[j] > m) m = r[j]; });
+    return A.map((r, i) => (i === j ? 1 : m > 0 ? 0.9 * r[j] / m : 0));
+  };
+  const meanA = S.att[0].map((r, a) => r.map((x, b) => S.att.reduce((t, M) => t + M[a][b], 0) / H));
+  // what the gradient of token i's LayerNorm-1 output comes from: its own query, key and value gradients, the queries
+  // that read it as a key or value (graded by the mean map's column i), and their tails up to the loss
+  const fromH1 = (i) => {
+    row('dq', i, 1); row('dk', i, 1); row('dv', i, 1);
+    readers(i, meanA).forEach((s, i2) => {
+      for (let h = 0; h < H; h++) put('datt' + h, i2, i, s);
+      row('do', i2, s); tail(i2, 'o', s);
+    });
+  };
+  let { t, r, c } = probe;
+  const base = SHAPES[t] ? t : t.slice(1);
+  if (WEIGHT_KEYS.includes(base)) {
+    for (const key of [base, 'd' + base, 'n' + base]) put(key, r, c, 1);
+    if (base === 'Wp') { for (let j = 0; j < T; j++) put('digit', (j >> 2) * P + (c >> 2), (j & 3) * P + (c & 3), 1); col('dxp', r, 1); }
+    else if (base === 'pos') put('dz0', r, c, 1);
+    else if (WEIGHT_IO[base]) { col(WEIGHT_IO[base][0], r, 1); col('d' + WEIGHT_IO[base][1], c, 1); }
+    else if (BIAS_OUT[base]) col('d' + BIAS_OUT[base], c, 1);
+    else if (LN_OUT[base]) { col(LN_OUT[base], c, 1); col('d' + LN_OUT[base], c, 1); }
+    return out;
+  }
+  if (t[0] !== 'd' || !ACTIVATIONS.includes(base)) return out;
+  put(t, r, c, 1);
+  const hd = Math.floor(c / DH), c0 = hd * DH, c1 = c0 + DH - 1;
+  switch (base) {
+    case 'prob': put('prob', 0, c, 1); break; // p − y: this class's probability, and the label
+    case 'avgNorm': row('dprob', 0, 1); row('Wh', c, 1); break;
+    case 'avg': row('davgNorm', 0, 1); row('dprob', 0, 1); row('lnf', 0, 1); break;
+    case 'z2': put('davg', 0, c, 1); row('davgNorm', 0, 1); row('dprob', 0, 1); break;
+    case 'hid': row('dz2', r, 1); row('W2', c, 1); head(1); break;
+    case 'h2': row('dhid', r, 1); row('W1', c, 1); tail(r, 'hid', 1); break;
+    case 'z1': put('dz2', r, c, 1); row('dh2', r, 1); tail(r, 'z1', 1); break;
+    case 'o': row('dz1', r, 1); row('Wo', c, 1); tail(r, 'z1', 1); break;
+    case 'att0': case 'att1': {
+      const h = +base[3];
+      row('do', r, 1, h * DH, h * DH + DH - 1); row('v', c, 1, h * DH, h * DH + DH - 1); tail(r, 'o', 1); break;
+    }
+    case 'v': readers(r, S.att[hd]).forEach((s, i) => { put('do', i, c, s); put('att' + hd, i, r, s); tail(i, 'o', s); }); break;
+    case 'k': readers(r, S.att[hd]).forEach((s, i) => { put('datt' + hd, i, r, s); row('q', i, s, c0, c1); row('do', i, s, c0, c1); tail(i, 'o', s); }); break;
+    case 'q': {
+      row('datt' + hd, r, 1); row('do', r, 1, c0, c1); tail(r, 'o', 1);
+      const A = S.att[hd]; let m = 0; A[r].forEach((a, j) => { if (j !== r && a > m) m = a; });
+      A[r].forEach((a, j) => row('k', j, j === r ? 1 : m > 0 ? 0.9 * a / m : 0, c0, c1)); break;
+    }
+    case 'h1': fromH1(r); row('Wq', c, 1); row('Wk', c, 1); row('Wv', c, 1); break;
+    case 'z0': put('dz1', r, c, 1); row('dh1', r, 1); fromH1(r); tail(r, 'z1', 1); break;
+    case 'xp': put('dz0', r, c, 1); row('dh1', r, 1); fromH1(r); tail(r, 'z1', 1); put('dz1', r, c, 1); break;
+    default: break;
   }
   return out;
 }
