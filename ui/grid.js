@@ -63,7 +63,7 @@ export function drawGrid(cv, data, w, h, o = {}) {
     const g = o.glow, full = (r, c) => r >= 0 && c >= 0 && r < h && c < w && g[r * w + c] >= 0.999;
     ctx.fillStyle = hl2;
     for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) {
-      const s = g[r * w + c]; if (s > 0) { ctx.globalAlpha = 0.12 + 0.38 * Math.min(1, s); ctx.fillRect(ox + c * cell, oy + r * cell, cell, cell); }
+      const s = g[r * w + c]; if (s > 0) { ctx.globalAlpha = 0.5 * Math.min(1, s); ctx.fillRect(ox + c * cell, oy + r * cell, cell, cell); }
     }
     ctx.globalAlpha = 1; ctx.strokeStyle = hl2; ctx.lineWidth = cell >= 8 ? 2 : 1.5; const e = ctx.lineWidth / 2; ctx.beginPath();
     for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) if (full(r, c)) {

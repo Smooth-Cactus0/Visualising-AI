@@ -1,7 +1,8 @@
 // ui/terms.js — dotted inline definitions (tooltip on hover, focus or tap) and the Terms section.
-// Shared by every page, each with its own list of terms (TERMS for the CNN pages, VIT_TERMS for the ViT page). A page links ../ui/terms.css, has <div id="tip" role="tooltip"></div> and an empty
-// .gloss element, and calls installTerms once its static text is in the DOM. Dynamic text (readouts, hints
-// rewritten on every step) is left unlinked on purpose.
+// Shared by every page, each with its own list of terms (TERMS for the CNN pages, VIT_TERMS for the ViT page).
+// A page links ../ui/terms.css, has <div id="tip" role="tooltip"></div> and an empty .gloss element, and calls
+// installTerms once its static text is in the DOM. Dynamic text (readouts, hints rewritten on every step) is
+// left unlinked on purpose.
 
 export const TERMS = [
   ['kernel', /\bkernel\b/i, 'Kernel (filter)', 'A small grid of weights, 3×3 here, that is slid over the input. Its values are learned parameters: training changes them. Each kernel produces one feature map.'],
@@ -38,7 +39,7 @@ export const VIT_TERMS = [
   ['patch', /\bpatch(es)?\b/i, 'Patch', 'A square tile of the image, 4×4 pixels here. The 16×16 digit is cut into 16 of them, numbered in reading order.'],
   ['position', /\bposition (embedding|table)s?\b/i, 'Position embedding', 'A learned row of 8 numbers per patch slot, added to the token in that slot. Attention by itself treats the tokens as a set; this table is the only way the model can know where a patch sat.'],
   ['token', /\btokens?\b/i, 'Token', 'One vector per patch, 8 numbers here, carried through the network as one row. Every step except attention works on each token separately.'],
-  ['head', /\b(attention )?heads?\b/i, 'Attention head', 'One complete attention pattern with its own queries, keys and values. This model has two, each 4 numbers wide; their outputs are joined back into 8 numbers and mixed by Wo.'],
+  ['head', /(?<!W )\b(attention )?heads?\b/i, 'Attention head', 'One complete attention pattern with its own queries, keys and values. This model has two, each 4 numbers wide; their outputs are joined back into 8 numbers and mixed by Wo.'],
   ['attention', /\b(self-)?attention\b/i, 'Attention', 'Each token builds its output as a weighted average of every token\'s value. The weights come from how well its query matches each key, through a softmax, so they are positive and sum to 1. They are computed from the image: where a token looks is not fixed, unlike a kernel\'s window.'],
   ['qkv', /\bquer(y|ies)\b/i, 'Query, key, value', 'Three learned projections of each token. The query is what the token looks for, the key what it offers to others, the value what it hands over. Score(i, j) = query i · key j / √4.'],
   ['layernorm', /\bLayerNorm\b/, 'LayerNorm', 'Rescales each token on its own to mean 0 and variance 1 across its 8 numbers, then applies a learned scale and shift per column. It keeps the numbers in range from step to step.'],
@@ -50,13 +51,13 @@ export const VIT_TERMS = [
   ['stride', /\bstride\b/i, 'Stride', 'How far the window jumps between outputs. With stride 4 and a 4×4 kernel the windows tile the image exactly: that is what cutting it into patches means.'],
   ['softmax', /\bsoftmax\b/i, 'Softmax', 'Turns scores into weights that are positive and sum to 1: exp(s) / Σ exp. Used twice here: across each row of an attention map, and over the 10 classes.'],
   ['rf', /\breceptive field\b/i, 'Receptive field', 'The part of the input a value can depend on. Before attention a token\'s receptive field is its own patch; after one attention step it is the whole image, which the green shades by attention weight.'],
-  ['weights', /\bweights\b/i, 'Weights / parameters', 'The numbers a network learns: the patch kernels, the position table, every matrix and bias, the LayerNorm scales and shifts. Tinted wherever they sit. Softmax, GELU, the average and the residual additions are fixed arithmetic.'],
+  ['weights', /(?<!attention )\bweights\b/i, 'Weights / parameters', 'The numbers a network learns: the patch kernels, the position table, every matrix and bias, the LayerNorm scales and shifts. Tinted wherever they sit. Softmax, GELU, the average and the residual additions are fixed arithmetic.'],
   ['heldout', /\bheld-out\b/i, 'Held-out test set', 'Digits the network never trained on, kept only to measure accuracy.'],
 ];
 
 /** Wrap the first mention of each term inside every element matching `selectors` in a <dfn>.
  *  Terms are taken in order of appearance in the text, so a term is never skipped because another one
- *  listed earlier in TERMS happens to occur later in the same paragraph. */
+ *  listed earlier in the list happens to occur later in the same paragraph. */
 export function linkTerms(selectors, terms = TERMS) {
   document.querySelectorAll(selectors).forEach((el) => {
     const seen = new Set();
