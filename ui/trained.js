@@ -30,12 +30,14 @@ export const VIT_KEY = 'dl-explorer.vit-weights.v1';
 
 export function saveTrainedViT(o) { localStorage.setItem(VIT_KEY, JSON.stringify(o)); }
 
-/** The stored ViT weights, or null when there are none or isWeights rejects them. */
+/** The stored ViT weights, or null when there are none or isWeights rejects them. Also checks the meta figures the pages print (digits, testAcc, lr are finite numbers), so a malformed hand-off is ignored rather than breaking the page. */
 export function loadTrainedViT(isWeights) {
   try {
     const s = localStorage.getItem(VIT_KEY); if (!s) return null;
     const o = JSON.parse(s);
-    return o && o.version === 1 && o.arch === 'vit16' && o.meta && isWeights(o.weights) ? o : null;
+    return o && o.version === 1 && o.arch === 'vit16' && o.meta
+      && Number.isFinite(o.meta.digits) && Number.isFinite(o.meta.testAcc) && Number.isFinite(o.meta.lr)
+      && isWeights(o.weights) ? o : null;
   } catch { return null; }
 }
 
