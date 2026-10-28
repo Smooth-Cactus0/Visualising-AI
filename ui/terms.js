@@ -39,7 +39,7 @@ export const VIT_TERMS = [
   ['patch', /\bpatch(es)?\b/i, 'Patch', 'A square tile of the image, 4×4 pixels here. The 16×16 digit is cut into 16 of them, numbered in reading order.'],
   ['position', /\bposition (embedding|table)s?\b/i, 'Position embedding', 'A learned row of 8 numbers per patch slot, added to the token in that slot. Attention by itself treats the tokens as a set; this table is the only way the model can know where a patch sat.'],
   ['token', /\btokens?\b/i, 'Token', 'One vector per patch, 8 numbers here, carried through the network as one row. Every step except attention works on each token separately.'],
-  ['head', /(?<!W )\b(attention )?heads?\b/i, 'Attention head', 'One complete attention pattern with its own queries, keys and values. This model has two, each 4 numbers wide; their outputs are joined back into 8 numbers and mixed by Wo.'],
+  ['head', /(?<!W |classifier )\b(attention )?heads?\b/i, 'Attention head', 'One complete attention pattern with its own queries, keys and values. This model has two, each 4 numbers wide; their outputs are joined back into 8 numbers and mixed by Wo.'],
   ['attention', /\b(self-)?attention\b/i, 'Attention', 'Each token builds its output as a weighted average of every token\'s value. The weights come from how well its query matches each key, through a softmax, so they are positive and sum to 1. They are computed from the image: where a token looks is not fixed, unlike a kernel\'s window.'],
   ['qkv', /\bquer(y|ies)\b/i, 'Query, key, value', 'Three learned projections of each token. The query is what the token looks for, the key what it offers to others, the value what it hands over. Score(i, j) = query i · key j / √4.'],
   ['layernorm', /\bLayerNorm\b/, 'LayerNorm', 'Rescales each token on its own to mean 0 and variance 1 across its 8 numbers, then applies a learned scale and shift per column. It keeps the numbers in range from step to step.'],
@@ -53,6 +53,16 @@ export const VIT_TERMS = [
   ['rf', /\breceptive field\b/i, 'Receptive field', 'The part of the input a value can depend on. Before attention a token\'s receptive field is its own patch; after one attention step it is the whole image, which the green shades by attention weight.'],
   ['weights', /(?<!attention )\bweights\b/i, 'Weights / parameters', 'The numbers a network learns: the patch kernels, the position table, every matrix and bias, the LayerNorm scales and shifts. Tinted wherever they sit. Softmax, GELU, the average and the residual additions are fixed arithmetic.'],
   ['heldout', /\bheld-out\b/i, 'Held-out test set', 'Digits the network never trained on, kept only to measure accuracy.'],
+];
+
+/** The ViT training page's terms: the ViT's, the training terms the CNN pages define (their wording fits both), and two
+ *  of its own. */
+const TRAINING = ['loss', 'gradient', 'backprop', 'lr', 'update', 'batch', 'pass', 'init'];
+export const VIT_TRAIN_TERMS = [
+  ...VIT_TERMS,
+  ...TERMS.filter((t) => TRAINING.includes(t[0])),
+  ['seed', /\bseeds?\b/i, 'Seed', 'The number that starts the random number generator, which sets the starting weights and the order of the digits. Two runs with the same seed are identical; runs with different seeds show how much of a result is luck.'],
+  ['locality', /\blocality\b/i, 'Locality', 'A convolution only ever combines neighbouring pixels: an assumption built into its shape, true of images, that a CNN never has to learn. Attention can join any two patches, so a ViT has to learn from examples which ones matter.'],
 ];
 
 /** Wrap the first mention of each term inside every element matching `selectors` in a <dfn>.
