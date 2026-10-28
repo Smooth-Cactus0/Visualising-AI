@@ -32,7 +32,7 @@ main{max-width:1240px;margin:0 auto;padding:28px 20px 80px}
 h1{font-size:28px;font-weight:600;letter-spacing:-.01em;margin:0 0 6px}
 h2{font-size:19px;font-weight:600;margin:0 0 4px}
 p{margin:0 0 10px;max-width:68ch}
-.lede{color:var(--ink2);font-size:15.5px;margin-bottom:10px;max-width:78ch}
+.lede{color:var(--ink2);font-size:15.5px;margin-bottom:10px;max-width:none}
 .keys{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--ink2);margin-bottom:18px}
 .keys span{display:inline-flex;align-items:center;gap:6px}
 .keys i{display:inline-block;width:14px;height:14px;border-radius:3px;border:3px solid var(--hl)}
@@ -246,7 +246,7 @@ const blockWin = (s) => [(s >> 2) * P, (s >> 2) * P + P - 1, (s & 3) * P, (s & 3
 
 // ---------- the lines: the overview and the five sections ----------
 function build() {
-  const A = 4, Wc = 3, fixed = (h) => () => h;
+  const A = 8, Wc = 6, fixed = (h) => () => h; // overview cell sizes: activations, weights
   const ovHead = (h) => [
     { v: [headCols('q', A, fixed(h))], lb: `Q${h + 1}`, sec: 's3' }, { op: '·' },
     { up: [headRows('k', A, fixed(h)), headRows('v', A, fixed(h))], v: [view('att' + h, A)], lb: `head ${h + 1}`, sec: 's3' }, { op: '=' },
@@ -265,13 +265,13 @@ function build() {
     { v: [view('ln2', Wc)], w: true, lb: 'LN₂', sec: 's4' }, { op: '·' },
     { v: [view('W1', Wc), view('b1', Wc)], w: true, lb: 'W₁', sec: 's4' }, { op: '=' },
     { v: [view('hid', A)], lb: 'hidden, GELU', sec: 's4' }, { op: '·' },
-    { v: [view('W2', 2), view('b2', 2)], w: true, lb: 'W₂', sec: 's4' }, { op: '+', id: 'add2' },
+    { v: [view('W2', 4), view('b2', 4)], w: true, lb: 'W₂', sec: 's4' }, { op: '+', id: 'add2' },
     { v: [view('z2', A)], lb: 'z₂', sec: 's4' }, { op: 'mean' },
     { v: [view('avg', A)], lb: 'average', sec: 's5' }, { op: 'LN' },
     { v: [view('lnf', Wc)], w: true, lb: 'LN', sec: 's5' }, { op: '=' },
     { v: [view('avgNorm', A)], lb: '', sec: 's5' }, { op: '·' },
     { v: [view('Wh', Wc), view('bh', Wc)], w: true, lb: 'W head', sec: 's5' }, { op: '=' },
-    { v: [bars(60, T * A)], lb: 'classes', sec: 's5' },
+    { v: [bars(120, T * A)], lb: 'classes', sec: 's5' },
   ], A);
 
   line($('l1'), [
