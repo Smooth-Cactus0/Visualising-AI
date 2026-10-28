@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ViT explorer — patches, tokens and attention</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<link rel="stylesheet" href="../ui/terms.css">
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  --bg:#f7f8f6; --panel:#ffffff; --ink:#1d2430; --ink2:#5b6474; --line:#d9ddd6; --line2:#eef0ec;
+  --accent:#2457a8; --accent-soft:#dde7f7;
+  --pos:#e5641e; --neg:#2a6fd6; --zero:#f3f4f1;
+  --hl:#ffd94a; --hl2:#3fae4b; --wtint:rgba(36,87,168,.07);
+  --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#171a1f; --panel:#1f232a; --ink:#e8eaee; --ink2:#9aa3b2; --line:#343a44; --line2:#272c35;
+  --accent:#7fa7ea; --accent-soft:#263650; --zero:#2a2f38; --hl:#d9b32d; --hl2:#5ad66a; --wtint:rgba(127,167,234,.09);
+}}
+:root[data-theme="dark"]{
+  --bg:#171a1f; --panel:#1f232a; --ink:#e8eaee; --ink2:#9aa3b2; --line:#343a44; --line2:#272c35;
+  --accent:#7fa7ea; --accent-soft:#263650; --zero:#2a2f38; --hl:#d9b32d; --hl2:#5ad66a; --wtint:rgba(127,167,234,.09);
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px);}
+*{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Public Sans",system-ui,sans-serif;font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+main{max-width:1240px;margin:0 auto;padding:28px 20px 80px}
+h1{font-size:28px;font-weight:600;letter-spacing:-.01em;margin:0 0 6px}
+h2{font-size:19px;font-weight:600;margin:0 0 4px}
+p{margin:0 0 10px;max-width:68ch}
+.lede{color:var(--ink2);font-size:15.5px;margin-bottom:10px;max-width:78ch}
+.keys{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--ink2);margin-bottom:18px}
+.keys span{display:inline-flex;align-items:center;gap:6px}
+.keys i{display:inline-block;width:14px;height:14px;border-radius:3px;border:3px solid var(--hl)}
+.keys i.g{border-color:var(--hl2);background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--hl2) 45%,transparent))}
+.keys i.wt{border:1px solid var(--accent);background:var(--wtint)}
+section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin-bottom:22px;scroll-margin-top:var(--ovh,0px)}
+.head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:12px}
+.head .n{font-family:var(--mono);color:var(--ink2);font-size:13px}
+.head p{color:var(--ink2);margin:0;flex:0 0 100%;font-size:14px;max-width:none;padding-right:max(0px,calc(100% - 92ch))}
+canvas{display:block;touch-action:none;border-radius:3px}
+.ctrls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
+button,select{font:inherit;font-size:13.5px;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:5px 10px;cursor:pointer}
+button:hover,select:hover{border-color:var(--accent)}
+button:disabled{opacity:.45;cursor:default}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.sel{background:var(--accent-soft);border-color:var(--accent)}
+label.ctl{display:inline-flex;align-items:center;gap:6px;font-size:13.5px;color:var(--ink2)}
+input[type=range]{accent-color:var(--accent)}
+.toggle{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.toggle button{border:0;border-radius:0}
+.toggle button+button{border-left:1px solid var(--line)}
+.math{font-family:var(--mono);font-size:12.5px;line-height:1.7;background:var(--line2);border-radius:6px;padding:10px 12px;overflow-x:auto;white-space:pre-wrap;min-height:3.2em;margin-top:10px}
+.math .sum{color:var(--accent);font-weight:600}
+.note{font-size:13.5px;color:var(--ink2);border-left:3px solid var(--accent-soft);padding:4px 12px;margin-top:10px;max-width:78ch}
+.banner{font-size:13.5px;background:var(--accent-soft);border:1px solid var(--accent);border-radius:8px;padding:8px 12px;margin:0 0 14px;max-width:78ch}
+.crumb{font-size:13px;color:var(--ink2);margin:0 0 10px}.crumb a{color:var(--accent);text-decoration:none}.crumb a:hover{text-decoration:underline}
+/* the pinned overview */
+.ov{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);margin:0 -20px 22px;padding:8px 20px 6px}
+.ov .ctrls{margin:0 0 6px;gap:6px}
+.ov button{font-size:12.5px;padding:3px 8px}
+.ov .digits button{min-width:26px;padding:3px 0}
+.wsrc{font-size:12.5px;color:var(--ink2)}
+.wsrc b{color:var(--ink)}
+.rbar{display:flex;gap:6px 18px;flex-wrap:wrap;align-items:baseline;margin-top:2px}
+.readout{flex:1 1 480px;font-size:13px;color:var(--ink2);min-height:1.5em}
+.readout b{color:var(--ink);font-weight:600}
+@media (max-width:700px){ .ov{position:static} }
+/* a line of tensors: storey (keys and values) over the token rows, labels under */
+.wrap{overflow-x:auto;padding-bottom:4px}
+.line{display:grid;grid-template-rows:auto auto auto;column-gap:8px;row-gap:3px;width:max-content;align-items:start;position:relative;padding-bottom:14px}
+.line .up{grid-row:1;align-self:end;justify-self:center;display:grid;gap:3px}
+.line .at{grid-row:2;display:grid;gap:3px;justify-items:start;justify-self:center}
+.line .at.w{background:var(--wtint);border:1px solid var(--accent);border-radius:4px;padding:2px}
+.line .lb{grid-row:3;font-size:11.5px;color:var(--ink2);text-align:center;white-space:nowrap;line-height:1.25}
+.line .op{grid-row:2;margin-top:var(--mid);font-family:var(--mono);font-size:12px;color:var(--ink2);white-space:nowrap}
+.line .sl{font-size:11px;color:var(--ink2)}
+.line [data-sec]{cursor:pointer}
+.kg{display:grid;gap:3px}
+.kg canvas.pick{cursor:pointer}
+svg.arcs{position:absolute;left:0;top:0;pointer-events:none;overflow:visible}
+@media (prefers-reduced-motion: reduce){ *{transition:none!important;scroll-behavior:auto!important} }
+</style>
+</head>
+<body>
+<main>
+<nav class="crumb"><a href="../">Visualising AI</a> › Vision Transformer, explorer</nav>
+<h1>ViT explorer</h1>
+<p class="lede">A ViT diagram says "patch embedding → + position → encoder (Norm → multi-head attention → + → Norm → MLP → +) → classifier". This page runs one small enough that every number fits on screen: a 16×16 digit cut into 16 patches, 8 numbers per token, one encoder block with two attention heads, <span id="pc">1,242</span> weights. The line below is the whole forward pass, token i always on row i; the sections zoom into one part at a time.</p>
+<div class="keys"><span><i></i> the window being computed: one patch, or one score</span><span><i class="g"></i> what a hovered value is computed from; after attention, shaded by attention weight</span><span><i class="wt"></i> learned weights, where they act</span></div>
+
+<div class="ov" id="ov">
+  <div class="ctrls">
+    <span class="digits" id="digits"></span><button id="another">another</button><span class="wsrc" id="dlab"></span>
+    <span class="toggle"><button id="wTr" class="sel">trained</button><button id="wRa">random</button></span>
+    <span class="toggle"><button id="pOn" class="sel">position on</button><button id="pOff">off</button></span>
+    <button id="shuf">Shuffle patches</button><button id="unshuf" disabled>Restore order</button>
+  </div>
+  <div class="wrap"><div id="ovLine"></div></div>
+  <div class="rbar"><div class="readout" id="readout"></div><div class="wsrc" id="wsrc"></div></div>
+</div>
+
+<section id="s1">
+  <div class="head"><h2>1 · Patches become tokens</h2><span class="n">4×4 kernels, stride 4 → 16 tokens × 8</span>
+    <p>The patch embedding is a convolution whose kernel is as big as its stride: 4×4 kernels jumping 4 pixels at a time, so the windows tile the digit without overlapping. Each of the 8 kernels gives one number per patch, so each patch becomes a token of 8 numbers, one row. It is the CNN page's kernel, jumping instead of sliding. Click a kernel to write its column out.</p></div>
+  <div class="wrap"><div id="l1"></div></div>
+  <div class="ctrls"><button id="p1">← prev</button><button id="play1" class="primary">Play</button><button id="n1">next →</button>
+    <input type="range" id="sl1" min="0" max="15" value="0">
+    <label class="ctl">speed <select id="sp1"><option value="500">slow</option><option value="220" selected>normal</option><option value="80">fast</option></select></label></div>
+  <div class="math" id="m1"></div>
+</section>
+
+<section id="s2">
+  <div class="head"><h2>2 · Position</h2><span class="n">z₀ = tokens + position table</span>
+    <p>Attention by itself does not know where a patch came from: shuffle the patches and, without position, every token keeps its content and the average of the tokens comes out the same. So a learned position table, one row of 8 numbers per slot, is added to the tokens. Try "Shuffle patches" at the top, with position on and then off.</p></div>
+  <div class="wrap"><div id="l2"></div></div>
+  <div class="math" id="m2"></div>
+</section>
+
+<section id="s3">
+  <div class="head"><h2>3 · One attention head, written out</h2><span class="n">A = softmax(Q·Kᵀ / 2), output = A·V</span>
+    <p>Each token makes a query, a key and a value from its LayerNorm output: three learned 8×8 matrices, of which each head uses 4 columns. Token i's score for token j is query i · key j / 2; a softmax along the row turns the scores into weights that sum to 1; token i's output is the weighted sum of the values. Keys and values stand as columns above the map, one per token, so each row of the map weights the columns directly above it.</p></div>
+  <div class="ctrls"><span class="toggle"><button id="hd0" class="sel">head 1</button><button id="hd1">head 2</button></span>
+    <label class="ctl">query token <input type="range" id="qi" min="0" max="15" value="0"><b id="qil">0</b></label></div>
+  <div class="wrap"><div id="l3"></div></div>
+  <div class="ctrls"><button id="p3">← prev</button><button id="play3" class="primary">Play</button><button id="n3">next →</button>
+    <input type="range" id="sl3" min="0" max="17" value="0">
+    <label class="ctl">speed <select id="sp3"><option value="500">slow</option><option value="220" selected>normal</option><option value="80">fast</option></select></label></div>
+  <div class="math" id="m3"></div>
+  <div class="note">Before this step a token had seen only its own patch; after it, every patch. The attention map is a receptive field that is global in one step, and computed from the image rather than fixed, unlike a kernel's window. The price: 16 tokens make 256 scores per head, and the count grows with the square of the number of patches, which is why real ViTs use large patches.</div>
+</section>
+
+<section id="s4">
+  <div class="head"><h2>4 · Mix the heads, residual, MLP</h2><span class="n">z₁ = z₀ + heads·Wo, z₂ = z₁ + MLP(LayerNorm(z₁))</span>
+    <p>The two heads' outputs are joined back into 8 numbers and mixed by Wo, and the block's input z₀ is added back, a residual connection, giving z₁. Then LayerNorm and an MLP, 8 → 32 → 8 with GELU, and z₁ is added back again. Every step here works on one token at a time, like a 1×1 convolution; attention was the only step where tokens met. A real ViT repeats this block 12 times or more.</p></div>
+  <div class="wrap"><div id="l4"></div></div>
+</section>
+
+<section id="s5">
+  <div class="head"><h2>5 · Average the tokens, then predict</h2><span class="n">mean of 16 tokens → LayerNorm → W head → softmax</span>
+    <p>The 16 tokens are averaged into 8 numbers, as the CNN's global average does with its maps; LayerNorm and W head turn them into 10 scores, and softmax into probabilities. The original ViT reads an extra class token instead; with a single block only that token's row would reach the answer, so this toy uses the average of the tokens, as many current ViTs do.</p></div>
+  <div class="wrap"><div id="l5"></div></div>
+  <div class="math" id="m5"></div>
+  <div class="note" id="wnote"></div>
+</section>
+
+<section id="s6">
+  <div class="head"><h2>Terms</h2><span class="n">dotted words above point here</span>
+    <p>Hover or tap a dotted term anywhere above for the same definition in place.</p></div>
+  <div class="gloss" id="gloss"></div>
+</section>
+</main>
+<div id="tip" role="tooltip"></div>
+
+<script type="module">
+import { SHAPES, P, T, D, DH, NC, init, forward, tensor, vitTrace, isWeights, paramCount } from '../core/vit.js';
+import { parseMnist16, image } from '../core/data.js';
+import { shuffledOrder } from '../core/train.js';
+import { drawGrid, cellAt, fmt, maxAbs, cssVar } from '../ui/grid.js';
+import { installTerms, VIT_TERMS } from '../ui/terms.js';
+const $ = (id) => document.getElementById(id);
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const pct = (x) => (100 * x).toFixed(1) + '%';
+
+// ---------- state ----------
+const wRandom = init(1);
+let wTrained = null, meta = null, useTrained = true;
+let data = null, byClass = [], pick = { cls: 7, n: 0 }, img = null;
+let position = true, order = null, shuffles = 0;
+let probe = null, head = 0, kSel = 0, sweep = 0, walk = { i: 0, step: 0 };
+let S = null;
+const W = () => (useTrained && wTrained ? wTrained : wRandom);
+
+// ---------- views: one canvas showing (part of) a tensor, by its SHAPES key ----------
+const views = []; // { cv, key, rows, cols, cell, map, yl, own, bars, blocks }
+const kOf = (v) => (typeof v.key === 'function' ? v.key() : v.key);
+const el = (cls, text) => { const d = document.createElement('div'); d.className = cls; if (text != null) d.textContent = text; return d; };
+/** A canvas for tensor `key` at `cell` px a cell. o.rows, o.cols and o.map(r, c) → [row, col] in the tensor show a part
+ *  of it; o.yl() gives the yellow ({ win, cell }); o.own() replaces the hover's green; o.bars draws probabilities. */
+function view(key, cell, o = {}) {
+  const [R, C] = SHAPES[typeof key === 'function' ? key() : key];
+  const v = { key, cell, rows: o.rows ?? R, cols: o.cols ?? C, map: o.map || ((r, c) => [r, c]), yl: o.yl, own: o.own, bars: o.bars, blocks: o.blocks };
+  const cv = document.createElement('canvas'); v.cv = cv;
+  cv.width = o.px ? o.px[0] : v.cols * cell; cv.height = o.px ? o.px[1] : v.rows * cell;
+  cv.style.width = cv.width + 'px'; cv.style.height = cv.height + 'px';
+  cv.addEventListener('pointermove', (ev) => { const p = v.bars ? barAt(v, ev) : cellAt(cv, ev); setProbe(p ? { t: kOf(v), ...rc(v.map(p[0], p[1])) } : null); });
+  cv.addEventListener('pointerleave', () => setProbe(null));
+  views.push(v); return cv;
+}
+const rc = ([r, c]) => ({ r, c });
+function setProbe(p) { if (JSON.stringify(p) !== JSON.stringify(probe)) { probe = p; render(); } }
+
+/** Lay out columns on a grid: { op, id } is an operator; { v: [elements], up, lb, w, grid, sec, id } a column, `up` above
+ *  the token rows (keys and values), `w` tinted as learned, `grid` its number of sub-columns, `sec` the section a click
+ *  on it scrolls to. */
+function line(box, items, cell) {
+  box.className = 'line'; box.innerHTML = ''; box.style.setProperty('--mid', Math.max(0, T * cell / 2 - 9) + 'px');
+  items.forEach((it, x) => {
+    const col = String(x + 1);
+    if (it.op != null) { const o = el('op', it.op); o.style.gridColumn = col; if (it.id) o.dataset.id = it.id; box.append(o); return; }
+    const parts = [];
+    if (it.up) { const u = el('up'); u.append(...it.up); parts.push(u); }
+    const a = el('at' + (it.w ? ' w' : '')); if (it.grid) a.style.gridTemplateColumns = `repeat(${it.grid}, auto)`; a.append(...it.v); if (it.id) a.dataset.id = it.id; parts.push(a);
+    parts.push(el('lb', it.lb || ''));
+    for (const p of parts) { p.style.gridColumn = col; if (it.sec) p.dataset.sec = it.sec; box.append(p); }
+    a.style.marginTop = Math.max(0, (T * cell - a.offsetHeight) / 2) + 'px'; // shorter columns sit level with the middle of the tokens
+  });
+}
+/** Dashed residual arcs under a line's labels, from a tensor's column to the + that adds it back. */
+function arcs(box, pairs) {
+  box.querySelector('svg.arcs')?.remove();
+  const b = box.getBoundingClientRect(); if (!b.width) return;
+  const labs = [...box.querySelectorAll('.lb')].map((l) => l.getBoundingClientRect().bottom - b.top);
+  const y = Math.max(...labs) + 6; let d = '';
+  for (const [from, to] of pairs) {
+    const A = box.querySelector(`[data-id="${from}"]`).getBoundingClientRect(), B = box.querySelector(`[data-id="${to}"]`).getBoundingClientRect();
+    const xa = A.left + A.width / 2 - b.left, xb = B.left + B.width / 2 - b.left;
+    d += `M${xa} ${y - 5}V${y}H${xb}V${B.bottom - b.top + 2}`;
+  }
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.classList.add('arcs');
+  svg.setAttribute('width', b.width); svg.setAttribute('height', y + 4);
+  svg.innerHTML = `<path d="${d}" fill="none" stroke="var(--ink2)" stroke-width="1" stroke-dasharray="3 2"/>`;
+  box.append(svg);
+}
+const kernels = (cell, cols, pickable) => {
+  const g = el('kg'); g.style.gridTemplateColumns = `repeat(${cols}, auto)`;
+  for (let d = 0; d < D; d++) {
+    const cv = view('Wp', cell, { rows: P, cols: P, map: (r, c) => [d, r * P + c], yl: pickable ? () => (d === kSel ? { win: [0, P - 1, 0, P - 1] } : {}) : null });
+    if (pickable) { cv.classList.add('pick'); cv.title = `kernel ${d + 1}: write out column ${d}`; cv.onclick = () => { kSel = d; render(); }; }
+    g.append(cv);
+  }
+  return g;
+};
+const headCols = (key, cell, h, yl) => view(key, cell, { cols: DH, map: (r, c) => [r, h() * DH + c], yl });
+const headRows = (key, cell, h, yl) => view(key, cell, { rows: DH, cols: T, map: (r, c) => [c, h() * DH + r], yl });
+const bias = (key, cell, h) => view(key, cell, h ? { cols: DH, map: (r, c) => [0, h() * DH + c] } : {});
+const bars = (wd, ht) => view('prob', 1, { rows: NC, cols: 1, map: (r) => [0, r], bars: true, px: [wd, ht] });
+const blockWin = (s) => [(s >> 2) * P, (s >> 2) * P + P - 1, (s & 3) * P, (s & 3) * P + P - 1];
+
+// ---------- the lines: the overview and the five sections ----------
+function build() {
+  const A = 4, Wc = 3, fixed = (h) => () => h;
+  const ovHead = (h) => [
+    { v: [headCols('q', A, fixed(h))], lb: `Q${h + 1}`, sec: 's3' }, { op: '·' },
+    { up: [headRows('k', A, fixed(h)), headRows('v', A, fixed(h))], v: [view('att' + h, A)], lb: `head ${h + 1}`, sec: 's3' }, { op: '=' },
+    { v: [headCols('o', A, fixed(h))], lb: 'A·V', sec: 's3' }];
+  line($('ovLine'), [
+    { v: [view('digit', A, { blocks: P })], lb: 'digit', sec: 's1' }, { op: '⋆' },
+    { v: [kernels(Wc, 2, false), view('bp', Wc)], w: true, lb: 'kernels', sec: 's1' }, { op: '=' },
+    { v: [view('xp', A)], lb: 'tokens', sec: 's1' }, { op: '+' },
+    { v: [view('pos', A)], w: true, lb: 'position', sec: 's2' }, { op: '=' },
+    { v: [view('z0', A)], lb: 'z₀', sec: 's2', id: 'z0' }, { op: 'LN' },
+    { v: [view('ln1', Wc)], w: true, lb: 'LN₁', sec: 's3' }, { op: '·' },
+    { v: [view('Wq', Wc), view('Wk', Wc), view('Wv', Wc), view('bq', Wc), view('bk', Wc), view('bv', Wc)], grid: 3, w: true, lb: 'Wq Wk Wv', sec: 's3' }, { op: '=' },
+    ...ovHead(0), { op: '' }, ...ovHead(1), { op: '·' },
+    { v: [view('Wo', Wc), view('bo', Wc)], w: true, lb: 'Wo', sec: 's4' }, { op: '+', id: 'add1' },
+    { v: [view('z1', A)], lb: 'z₁', sec: 's4', id: 'z1' }, { op: 'LN' },
+    { v: [view('ln2', Wc)], w: true, lb: 'LN₂', sec: 's4' }, { op: '·' },
+    { v: [view('W1', Wc), view('b1', Wc)], w: true, lb: 'W₁', sec: 's4' }, { op: '=' },
+    { v: [view('hid', A)], lb: 'hidden, GELU', sec: 's4' }, { op: '·' },
+    { v: [view('W2', 2), view('b2', 2)], w: true, lb: 'W₂', sec: 's4' }, { op: '+', id: 'add2' },
+    { v: [view('z2', A)], lb: 'z₂', sec: 's4' }, { op: 'mean' },
+    { v: [view('avg', A)], lb: 'average', sec: 's5' }, { op: 'LN' },
+    { v: [view('lnf', Wc)], w: true, lb: 'LN', sec: 's5' }, { op: '=' },
+    { v: [view('avgNorm', A)], lb: '', sec: 's5' }, { op: '·' },
+    { v: [view('Wh', Wc), view('bh', Wc)], w: true, lb: 'W head', sec: 's5' }, { op: '=' },
+    { v: [bars(60, T * A)], lb: 'classes', sec: 's5' },
+  ], A);
+
+  line($('l1'), [
+    { v: [view('digit', 16, { blocks: P, yl: () => ({ win: blockWin(sweep) }) })], lb: 'digit, cut into 16 patches' }, { op: '⋆' },
+    { v: [kernels(12, 4, true), view('bp', 12, { yl: () => ({ cell: [0, kSel] }) })], w: true, lb: '8 kernels and their biases' }, { op: '=' },
+    { v: [view('xp', 14, { yl: () => ({ win: [sweep, sweep, 0, D - 1], cell: [sweep, kSel] }) })], lb: 'patch tokens, 16 × 8' },
+  ], 14);
+
+  line($('l2'), [
+    { v: [view('xp', 13)], lb: 'patch tokens' }, { op: '+' },
+    { v: [view('pos', 13)], w: true, lb: 'position table' }, { op: '=' },
+    { v: [view('z0', 13)], lb: 'z₀' },
+  ], 13);
+
+  const hd = () => head, j = () => walk.step, i = () => walk.i, last = T + 1;
+  line($('l3'), [
+    { v: [view('h1', 13)], lb: 'LayerNorm(z₀)' }, { op: '·' },
+    { v: [headCols('Wq', 9, hd), bias('bq', 9, hd), headCols('Wk', 9, hd), bias('bk', 9, hd), headCols('Wv', 9, hd), bias('bv', 9, hd)], w: true, lb: 'this head’s 4 columns' }, { op: '=' },
+    { v: [headCols('q', 14, hd, () => ({ win: [i(), i(), 0, DH - 1] }))], lb: 'Q' }, { op: '·' },
+    { up: [el('sl', 'Kᵀ: one key per token'), headRows('k', 14, hd, () => (j() < T ? { win: [0, DH - 1, j(), j()] } : {})),
+      el('sl', 'Vᵀ: one value per token'), headRows('v', 14, hd, () => (j() === last ? { win: [0, DH - 1, 0, T - 1] } : {}))],
+    v: [view(() => 'att' + head, 14, { yl: () => (j() < T ? { cell: [i(), j()] } : { win: [i(), i(), 0, T - 1] }) })], lb: 'A = softmax(Q·Kᵀ / 2)' }, { op: '=' },
+    { v: [headCols('o', 14, hd, () => (j() === last ? { win: [i(), i(), 0, DH - 1] } : {}))], lb: 'A·V' }, { op: '' },
+    { v: [view('digit', 9, { blocks: P, own: () => vitTrace(S, { t: 'o', r: walk.i, c: head * DH }).digit })], lb: 'where this token looked' },
+  ], 14);
+
+  line($('l4'), [
+    { v: [view('o', 11)], lb: 'heads joined' }, { op: '·' },
+    { v: [view('Wo', 9), view('bo', 9)], w: true, lb: 'Wo' }, { op: '+ z₀' },
+    { v: [view('z1', 11)], lb: 'z₁' }, { op: 'LN' },
+    { v: [view('ln2', 9)], w: true, lb: 'LN₂' }, { op: '·' },
+    { v: [view('W1', 7), view('b1', 7)], w: true, lb: 'W₁, 8 → 32' }, { op: '=' },
+    { v: [view('hid', 8)], lb: 'hidden, after GELU' }, { op: '·' },
+    { v: [view('W2', 7), view('b2', 7)], w: true, lb: 'W₂, 32 → 8' }, { op: '+ z₁' },
+    { v: [view('z2', 11)], lb: 'z₂' },
+  ], 11);
+
+  line($('l5'), [
+    { v: [view('z2', 11)], lb: 'z₂' }, { op: 'mean' },
+    { v: [view('avg', 18)], lb: 'average' }, { op: 'LN' },
+    { v: [view('lnf', 18)], w: true, lb: 'scale, shift' }, { op: '=' },
+    { v: [view('avgNorm', 18)], lb: 'normalised' }, { op: '·' },
+    { v: [view('Wh', 18), view('bh', 18)], w: true, lb: 'W head, bias' }, { op: '=' },
+    { v: [bars(240, 220)], lb: 'class probabilities' },
+  ], 11);
+
+  $('ovLine').addEventListener('click', (e) => { const s = e.target.closest('[data-sec]'); if (s) $(s.dataset.sec).scrollIntoView({ behavior: reduce ? 'auto' : 'smooth' }); });
+}
+const layout = () => { arcs($('ovLine'), [['z0', 'add1'], ['z1', 'add2']]); document.documentElement.style.setProperty('--ovh', ($('ov').offsetHeight + 10) + 'px'); };
+
+// ---------- probabilities as bars ----------
+function drawBars(v, vals, glow) {
+  const { cv } = v, ctx = cv.getContext('2d'), h = cv.height / NC, wd = cv.width, top = vals.indexOf(Math.max(...vals));
+  const lab = h >= 14, x0 = lab ? 16 : 0, x1 = lab ? wd - 46 : wd;
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, wd, cv.height);
+  ctx.font = `${Math.min(12, h * 0.6)}px ${getComputedStyle(document.body).fontFamily}`; ctx.textBaseline = 'middle';
+  for (let c = 0; c < NC; c++) {
+    const y = c * h;
+    ctx.fillStyle = cssVar('--line2'); ctx.fillRect(x0, y + 1, x1 - x0, h - 2);
+    ctx.fillStyle = cssVar('--accent'); ctx.globalAlpha = c === top ? 1 : 0.6; ctx.fillRect(x0, y + 1, (x1 - x0) * vals[c], h - 2); ctx.globalAlpha = 1;
+    if (glow && glow[c] > 0) { ctx.strokeStyle = cssVar('--hl2'); ctx.lineWidth = 2; ctx.strokeRect(x0 + 1, y + 1, x1 - x0 - 2, h - 2); }
+    if (lab) { ctx.fillStyle = cssVar('--ink2'); ctx.textAlign = 'left'; ctx.fillText(String(c), 2, y + h / 2); ctx.textAlign = 'right'; ctx.fillText(pct(vals[c]), wd - 2, y + h / 2); }
+  }
+}
+function barAt(v, ev) { const b = v.cv.getBoundingClientRect(), r = Math.floor((ev.clientY - b.top) / (b.height / NC)); return r >= 0 && r < NC ? [r, 0] : null; }
+
+// ---------- render ----------
+function render() {
+  if (!img) return;
+  const w = W();
+  S = forward(w, img, { position, order });
+  const green = vitTrace(S, probe), scale = {};
+  for (const v of views) {
+    const key = kOf(v), M = tensor(key, S, w), C = SHAPES[key][1];
+    const G = v.own ? v.own() : green[key];
+    const vals = new Float32Array(v.rows * v.cols), glow = G ? new Float32Array(v.rows * v.cols) : null;
+    for (let r = 0; r < v.rows; r++) for (let c = 0; c < v.cols; c++) {
+      const [mr, mc] = v.map(r, c); vals[r * v.cols + c] = M[mr][mc]; if (glow) glow[r * v.cols + c] = G[mr * C + mc];
+    }
+    if (v.bars) { drawBars(v, vals, glow); continue; }
+    const s = key === 'digit' ? 1 : (scale[key] ??= maxAbs(M.flat()));
+    const y = v.yl ? v.yl() : {};
+    drawGrid(v.cv, vals, v.cols, v.rows, { mode: key === 'digit' ? null : 'div', scale: s, glow, lines: v.cell >= 7, blocks: v.blocks, win: y.win, cell: y.cell });
+  }
+  $('readout').innerHTML = describe(probe);
+  $('m1').innerHTML = patchMath(); $('m2').textContent = shuffleText(); $('m3').innerHTML = attentionMath(); $('m5').innerHTML = headMath();
+  wording();
+  $('sl1').value = sweep; $('sl3').value = walk.step; $('qi').value = walk.i; $('qil').textContent = walk.i;
+}
+
+// ---------- readouts ----------
+const NAME = { xp: 'patch token', z0: 'z₀', h1: 'LayerNorm 1 output', q: 'query', k: 'key', v: 'value', o: 'heads joined', z1: 'z₁', h2: 'LayerNorm 2 output', hid: 'MLP hidden', z2: 'z₂',
+  Wp: 'patch kernels', bp: 'patch bias', pos: 'position table', ln1: 'LayerNorm 1 (row 0 scale, row 1 shift)', ln2: 'LayerNorm 2 (row 0 scale, row 1 shift)', lnf: 'final LayerNorm (row 0 scale, row 1 shift)',
+  Wq: 'Wq', bq: 'bq', Wk: 'Wk', bk: 'bk', Wv: 'Wv', bv: 'bv', Wo: 'Wo', bo: 'bo', W1: 'W₁', b1: 'b₁', W2: 'W₂', b2: 'b₂', Wh: 'W head', bh: 'head bias' };
+const meanAtt = () => S.att[0].map((r, a) => r.map((x, b) => (x + S.att[1][a][b]) / 2));
+function describe(p) {
+  if (!p) return 'Hover any cell: green shows what it is computed from. After attention, its strength is the attention weight.';
+  const val = tensor(p.t, S, W())[p.r][p.c], at = `<b>${NAME[p.t] || p.t}</b>`;
+  if (p.t === 'digit') { const s = (p.r >> 2) * 4 + (p.c >> 2); return `<b>pixel (${p.r}, ${p.c})</b> = ${fmt(val)}, in patch ${s}, which becomes token ${s}.`; }
+  if (p.t === 'att0' || p.t === 'att1') {
+    const h = +p.t[3];
+    return `<b>head ${h + 1}</b>: token ${p.r} gives token ${p.c} the weight <b>${fmt(val)}</b> (score ${fmt(S.scores[h][p.r][p.c])}); each row sums to 1. Green: query ${p.r} and key ${p.c}, and every other key faintly, since the softmax divides by all of them.`;
+  }
+  if (['xp', 'z0', 'h1', 'q', 'k', 'v'].includes(p.t)) return `${at}, token ${p.r}, column ${p.c} = ${fmt(val)}. Before attention a token has seen only its own patch.`;
+  if (['o', 'z1', 'h2', 'hid', 'z2'].includes(p.t)) {
+    const one = p.t === 'o', A = one ? S.att[Math.floor(p.c / DH)] : meanAtt();
+    const top = A[p.r].map((a, j) => [a, j]).filter(([, j]) => j !== p.r).sort((x, y) => y[0] - x[0]).slice(0, 3).map(([a, j]) => `token ${j} (${fmt(a)})`).join(', ');
+    return `${at}, token ${p.r}, column ${p.c} = ${fmt(val)}. After attention: its own patch full green, every other patch by the attention weight it got${one ? ` in head ${Math.floor(p.c / DH) + 1}` : ', both heads averaged'}, scaled to the largest (attention, not importance). Most attended: ${top}.`;
+  }
+  if (p.t === 'avg') return `<b>average, column ${p.c}</b> = ${fmt(val)}: column ${p.c} of z₂ averaged over the 16 tokens, as the CNN averages each map.`;
+  if (p.t === 'avgNorm') return `<b>normalised average, column ${p.c}</b> = ${fmt(val)}.`;
+  if (p.t === 'prob') return `<b>class ${p.c}</b>: ${pct(val)}. It reads only the 8 normalised averages, through column ${p.c} of W head and its bias.`;
+  return `${at} [${p.r}, ${p.c}] = ${fmt(val)}, learned. Green: what it reads and what it makes.`;
+}
+function patchMath() {
+  const w = W(), px = S.patches[sweep], k = w.Wp[kSel], t = px.map((x, q) => `${fmt(x)}×${fmt(k[q])}`);
+  return `token ${sweep}, column ${kSel} = Σ pixel × kernel ${kSel + 1} + bias   (patch ${sweep}: rows ${(sweep >> 2) * 4}–${(sweep >> 2) * 4 + 3}, cols ${(sweep & 3) * 4}–${(sweep & 3) * 4 + 3})\n`
+    + `  = ${t.slice(0, 8).join(' + ')}\n  + ${t.slice(8).join(' + ')}\n  + ${fmt(w.bp[kSel])}\n  = <span class="sum">${fmt(S.xp[sweep][kSel])}</span>`;
+}
+function shuffleText() {
+  if (!order) return 'Patches in reading order. Press "Shuffle patches" at the top, with position on and then off.';
+  const base = forward(W(), img, { position }), d = Math.max(...base.prob.map((x, c) => Math.abs(x - S.prob[c])));
+  const top = (pr) => { const c = pr.indexOf(Math.max(...pr)); return `${c} (${pct(pr[c])})`; };
+  return `reading order: ${top(base.prob)}\nshuffled:      ${top(S.prob)}\n` + (position
+    ? `different (largest change ${pct(d)}): each slot has its own row of the position table, so moving a patch changes what the model sees.`
+    : `identical (largest difference ${d.toExponential(1)}): without position, attention treats the tokens as a set, and their average ignores order.`);
+}
+function attentionMath() {
+  const h = head, off = h * DH, i = walk.i, s = walk.step, q = S.q[i].slice(off, off + DH);
+  if (s < T) {
+    const k = S.k[s].slice(off, off + DH);
+    return `head ${h + 1}, score(${i}, ${s}) = query ${i} · key ${s} / 2\n  = (${q.map((x, c) => `${fmt(x)}×${fmt(k[c])}`).join(' + ')}) / 2\n  = <span class="sum">${fmt(S.scores[h][i][s])}</span>`;
+  }
+  if (s === T) return `head ${h + 1}, row ${i}: weights = softmax(scores) = exp(score) / Σ exp(score)\n  scores  ${S.scores[h][i].map(fmt).join('  ')}\n  weights ${S.att[h][i].map(fmt).join('  ')}   (sum 1)`;
+  const A = S.att[h][i];
+  return `head ${h + 1}, output of token ${i} = Σ_j weight(${i}, j) × value j, for each of its 4 numbers:\n` + [0, 1, 2, 3].map((c) => {
+    const terms = A.map((a, j) => [a * S.v[j][off + c], a, j]).sort((x, y) => Math.abs(y[0]) - Math.abs(x[0]));
+    return `  out[${c}] = ${terms.slice(0, 3).map(([, a, j]) => `${fmt(a)}×${fmt(S.v[j][off + c])}`).join(' + ')} + (13 smaller) = <span class="sum">${fmt(S.heads[h][i][c])}</span>`;
+  }).join('\n');
+}
+function headMath() {
+  const w = W();
+  if (!probe || probe.t !== 'prob') return 'scores = normalised average · W head + bias, then softmax. Hover a class for its numbers.';
+  const c = probe.c;
+  return `score(${c}) = ${S.avgNorm.map((x, d) => `${fmt(x)}×${fmt(w.Wh[d][c])}`).join(' + ')} + ${fmt(w.bh[c])}\n  = <span class="sum">${fmt(S.logits[c])}</span>\nsoftmax: exp(score(${c})) / Σ exp(score) = <span class="sum">${pct(S.prob[c])}</span>`;
+}
+function wording() {
+  const top = S.prob.indexOf(Math.max(...S.prob)), trained = useTrained && wTrained;
+  const opt = meta && (meta.optimiser === 'adam' ? 'Adam' : 'SGD');
+  $('wsrc').innerHTML = `prediction <b>${top}</b> (${pct(S.prob[top])}), ` + (trained ? `trained weights: ${pct(meta.testAcc)} right on held-out digits` : 'random weights: arbitrary');
+  $('wnote').textContent = trained
+    ? `These weights were trained offline by tools/train_vit.mjs on the 3,000 training digits (${meta.passes} passes, ${opt}); they get ${pct(meta.testAcc)} of the 1,000 held-out digits right, ${meta.testAcc >= 0.8 ? 'about what' : 'less than'} the CNN pages' toy reaches on the same digits (80 to 85%). On real photographs a ViT needs far more training data than a CNN to catch up: it has to learn from examples the locality a convolution has built in.`
+    : 'These are random starting weights, before any training. Attention is learned: before training its maps are noise and the prediction is arbitrary.';
+}
+
+// ---------- controls ----------
+function setDigit() { const list = byClass[pick.cls], i = list[pick.n % list.length]; img = image(data.test, i); $('dlab').textContent = `test digit ${i}, a ${pick.cls}`; }
+function syncControls() {
+  [...$('digits').children].forEach((b, c) => b.classList.toggle('sel', c === pick.cls));
+  $('wTr').classList.toggle('sel', useTrained && !!wTrained); $('wRa').classList.toggle('sel', !(useTrained && wTrained)); $('wTr').disabled = !wTrained;
+  $('pOn').classList.toggle('sel', position); $('pOff').classList.toggle('sel', !position); $('unshuf').disabled = !order;
+  $('hd0').classList.toggle('sel', head === 0); $('hd1').classList.toggle('sel', head === 1);
+}
+for (let c = 0; c < NC; c++) { const b = document.createElement('button'); b.textContent = c; b.onclick = () => { pick = { cls: c, n: 0 }; setDigit(); syncControls(); render(); }; $('digits').append(b); }
+$('another').onclick = () => { pick.n++; setDigit(); render(); };
+const on = (id, f) => { $(id).onclick = () => { f(); syncControls(); render(); }; };
+on('wTr', () => { useTrained = true; }); on('wRa', () => { useTrained = false; });
+on('pOn', () => { position = true; }); on('pOff', () => { position = false; });
+on('shuf', () => { order = shuffledOrder(T, ++shuffles); }); on('unshuf', () => { order = null; });
+on('hd0', () => { head = 0; }); on('hd1', () => { head = 1; });
+$('qi').oninput = (e) => { walk.i = +e.target.value; render(); };
+/** Play, step and scrub one of the two walks: get/set its step, n steps in all. Reduced motion jumps to the end. */
+function player(id, n, get, set) {
+  let timer = null; const btn = $('play' + id);
+  const stop = () => { clearInterval(timer); timer = null; btn.textContent = 'Play'; };
+  btn.onclick = () => {
+    if (timer) return stop();
+    if (reduce) { set(n - 1); return render(); }
+    if (get() >= n - 1) set(0);
+    btn.textContent = 'Pause';
+    timer = setInterval(() => { set(get() + 1); render(); if (get() >= n - 1) stop(); }, +$('sp' + id).value);
+  };
+  $('p' + id).onclick = () => { stop(); set(Math.max(0, get() - 1)); render(); };
+  $('n' + id).onclick = () => { stop(); set((get() + 1) % n); render(); };
+  $('sl' + id).oninput = (e) => { stop(); set(+e.target.value); render(); };
+}
+player(1, T, () => sweep, (s) => { sweep = s; });
+player(3, T + 2, () => walk.step, (s) => { walk.step = s; });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);
+addEventListener('resize', layout);
+
+// ---------- start ----------
+function banner(text) { const d = el('banner'); d.textContent = text; document.querySelector('h1').after(d); }
+async function start() {
+  build();
+  installTerms({ selectors: '.lede, .head p, .note', tip: $('tip'), gloss: $('gloss'), terms: VIT_TERMS });
+  $('pc').textContent = paramCount(wRandom).toLocaleString('en-NZ');
+  const [bin, js] = await Promise.all([
+    fetch('../data/mnist16.bin').then((r) => (r.ok ? r.arrayBuffer() : null)).catch(() => null),
+    fetch('../models/vit16.json').then((r) => (r.ok ? r.json() : null)).catch(() => null),
+  ]);
+  if (!bin) { banner('Could not load the digits (data/mnist16.bin); this page needs to be served over http.'); return; }
+  data = parseMnist16(bin);
+  byClass = Array.from({ length: NC }, (_, c) => [...Array(data.test.n).keys()].filter((i) => data.test.labels[i] === c));
+  if (js && js.version === 1 && isWeights(js.weights)) { wTrained = js.weights; meta = js.meta; }
+  else { useTrained = false; banner('Could not load the trained weights (models/vit16.json), so this page shows random starting weights.'); }
+  setDigit(); syncControls(); render(); layout();
+}
+const ready = start();
+</script>
+</body>
+</html>
