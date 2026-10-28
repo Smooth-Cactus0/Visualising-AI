@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ViT training — how attention learns</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<link rel="stylesheet" href="../ui/terms.css">
+<link rel="stylesheet" href="../ui/vitline.css">
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  --bg:#f7f8f6; --panel:#ffffff; --ink:#1d2430; --ink2:#5b6474; --line:#d9ddd6; --line2:#eef0ec;
+  --accent:#2457a8; --accent-soft:#dde7f7;
+  --pos:#e5641e; --neg:#2a6fd6; --zero:#f3f4f1;
+  --hl:#ffd94a; --hl2:#3fae4b; --wtint:rgba(36,87,168,.07);
+  --cnn:#e5641e; --vit:#2457a8;
+  --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#171a1f; --panel:#1f232a; --ink:#e8eaee; --ink2:#9aa3b2; --line:#343a44; --line2:#272c35;
+  --accent:#7fa7ea; --accent-soft:#263650; --zero:#2a2f38; --hl:#d9b32d; --hl2:#5ad66a; --wtint:rgba(127,167,234,.09);
+  --cnn:#e5641e; --vit:#5f8fe0;
+}}
+:root[data-theme="dark"]{
+  --bg:#171a1f; --panel:#1f232a; --ink:#e8eaee; --ink2:#9aa3b2; --line:#343a44; --line2:#272c35;
+  --accent:#7fa7ea; --accent-soft:#263650; --zero:#2a2f38; --hl:#d9b32d; --hl2:#5ad66a; --wtint:rgba(127,167,234,.09);
+  --cnn:#e5641e; --vit:#5f8fe0;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px);}
+*{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Public Sans",system-ui,sans-serif;font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+main{max-width:1240px;margin:0 auto;padding:28px 20px 80px}
+h1{font-size:28px;font-weight:600;letter-spacing:-.01em;margin:0 0 6px}
+h2{font-size:19px;font-weight:600;margin:0 0 4px}
+p{margin:0 0 10px;max-width:68ch}
+.lede{color:var(--ink2);font-size:15.5px;margin-bottom:10px;max-width:none}
+.keys{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--ink2);margin-bottom:18px}
+.keys span{display:inline-flex;align-items:center;gap:6px}
+.keys i{display:inline-block;width:14px;height:14px;border-radius:3px;border:3px solid var(--hl2);background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--hl2) 45%,transparent))}
+.keys i.front{border-width:2px;background:transparent}
+.keys i.wt{border:1px solid var(--accent);background:var(--wtint)}
+section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin-bottom:22px}
+.head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:12px}
+.head .n{font-family:var(--mono);color:var(--ink2);font-size:13px}
+.head p{color:var(--ink2);margin:0;flex:0 0 100%;font-size:14px;max-width:none;padding-right:max(0px,calc(100% - 92ch))}
+canvas{display:block;touch-action:pan-x pan-y;border-radius:3px}
+.cap{font-size:13px;color:var(--ink2);margin-top:6px;font-variant-numeric:tabular-nums}
+.cap b{color:var(--ink);font-weight:600}
+.ctrls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
+button,select{font:inherit;font-size:13.5px;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:5px 10px;cursor:pointer}
+button:hover,select:hover{border-color:var(--accent)}
+button:disabled{opacity:.45;cursor:default}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+label.ctl{display:inline-flex;align-items:center;gap:6px;font-size:13.5px;color:var(--ink2)}
+input[type=range]{accent-color:var(--accent)}
+.math{font-family:var(--mono);font-size:12.5px;line-height:1.7;background:var(--line2);border-radius:6px;padding:10px 12px;overflow-x:auto;white-space:pre-wrap;min-height:3.2em;margin-top:10px}
+.math .sum{color:var(--accent);font-weight:600}
+.note{font-size:13.5px;color:var(--ink2);border-left:3px solid var(--accent-soft);padding:4px 12px;margin:10px 0 0;max-width:92ch}
+.crumb{font-size:13px;color:var(--ink2);margin:0 0 10px}.crumb a{color:var(--accent);text-decoration:none}.crumb a:hover{text-decoration:underline}
+main a{color:var(--accent)}
+.phase{display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:var(--ink2)}
+.phase b{font-weight:500;padding:2px 7px;border-radius:10px;border:1px solid var(--line)}
+.phase b.done{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
+.phase b.next{border-style:dashed;border-color:var(--accent)}
+.netwrap{overflow-x:auto;margin-top:12px;border:1px solid var(--line2);border-radius:10px;background:var(--bg);padding:8px 0 4px}
+.netwrap .line .rl{background:var(--bg)}
+.curves{display:flex;gap:18px;flex-wrap:wrap}
+.curves > div{min-width:0;max-width:100%}
+.curves canvas{max-width:100%;height:auto}
+.snaps{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;margin-top:6px}
+.snaps > div{text-align:center;font-size:12px;color:var(--ink2)}
+.snaps .trio{display:flex;gap:4px;margin-bottom:4px}
+.thumbs{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.thumbs > div{text-align:center;font-size:11px;color:var(--ink2);width:34px;font-family:var(--mono)}
+.thumbs .ok{color:var(--hl2)} .thumbs .no{color:var(--pos)}
+.lrv{font-family:var(--mono);font-size:12.5px;min-width:3.5em}
+.legend{display:flex;gap:16px;font-size:13px;color:var(--ink2);margin:4px 0 6px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{display:inline-block;width:14px;height:3px;border-radius:2px}
+.legend i.hollow{width:10px;height:10px;border-radius:50%;border:2px solid var(--ink2);background:transparent}
+.chartbox{position:relative;max-width:100%;overflow-x:auto}
+#ctip{position:fixed;z-index:9;display:none;pointer-events:none;background:var(--ink);color:var(--bg);font-size:12.5px;padding:5px 9px;border-radius:6px;font-variant-numeric:tabular-nums}
+@media (prefers-reduced-motion: reduce){ *{transition:none!important;scroll-behavior:auto!important} }
+</style>
+</head>
+<body>
+<main>
+<nav class="crumb"><a href="../">Visualising AI</a> › Vision Transformer, training</nav>
+<h1>ViT training</h1>
+<p class="lede">The toy Vision Transformer of the <a href="../vit/">explorer</a>, now learning. Real MNIST digits shrunk to 16×16 come in one at a time; the loss says how wrong the guess was, and the error flows back from the loss through the classifier head, the MLP, attention and the patch embedding, giving every weight a gradient. One step is shown in full, then thousands; at the end the ViT races the CNN on small sets of digits, where a CNN's built-in locality is worth the most.</p>
+<div class="keys"><span><i></i> what a hovered value is computed from: upstream for an activation (by a row of attention), downstream for a gradient (by a column), the two columns of a weight's gradient</span><span><i class="front"></i> what the last backward step computed</span><span><i class="wt"></i> learned weights, where they act</span></div>
+<div class="note" id="status">Loading 4,000 digits (1 MB)…</div>
+
+<section id="s1">
+  <div class="head"><h2>One step</h2><span class="n">digit → forward → backward, a stage at a time → update</span>
+    <p>The ViT is laid out as on the explorer, token i on row i, with three rows: forward (activations, and the weights where they act), backward (the gradient of each, under it) and update (w′ = w − learning rate × gradient, under each weight). Step runs one phase. Backward starts at the class scores as p − y and flows right to left, a stage per step: the classifier head, the MLP, attention, the patch embedding; each step frames in green what it computed. Through attention the error flows the other way round from the forward pass: a token's output read a row of the attention map, so the gradient of a token's key and value collects from a column, every query that read it, in proportion. A weight's gradient sums, over the 16 tokens, what came forward into it times what came back out of it. Next digit finishes this digit and brings the next. While Many steps plays, this band follows the training.</p></div>
+  <div class="ctrls">
+    <span class="phase" id="phase"><b data-p="0">digit</b>→<b data-p="1">forward</b>→<b data-p="2">back: head</b>→<b data-p="3">back: MLP</b>→<b data-p="4">back: attention</b>→<b data-p="5">back: embedding</b>→<b data-p="6">update</b></span>
+    <button id="stepBtn" class="primary">Step</button><button id="nextBtn">Next digit</button>
+    <span class="cap" id="digitInfo"></span>
+  </div>
+  <div class="netwrap"><div id="net"></div></div>
+  <div class="math" id="readout"></div>
+</section>
+
+<section id="s2">
+  <div class="head"><h2>Many steps</h2><span class="n">play · curves · attention and position over training</span>
+    <p>Play repeats the step for digit after digit, with SGD. The loss curve shows the loss per digit and its running average; accuracy is measured on the last 200 training digits and, every 500 digits, on the 1,000 held-out digits the network never trains on. This transformer is sensitive to the learning rate: from about 0.1 up it stops learning (measured: 0.1 reached 30% after ten passes, 0.3 nothing), where the CNN page trains well at 0.1. Below, at six moments of training: both heads' attention maps for one fixed digit, and the position table as similarities.</p></div>
+  <div class="ctrls">
+    <button id="playBtn" class="primary">Play</button><button id="resetBtn" title="new random weights; curves, snapshots and digits cleared">Restart</button>
+    <label class="ctl">speed <select id="speed"><option value="2">2 / s</option><option value="10">10 / s</option><option value="50">50 / s</option><option value="200" selected>200 / s</option><option value="500">500 / s</option></select></label>
+    <label class="ctl">learning rate <input type="range" id="lr" min="0" max="100" value="33" style="width:120px"><span class="lrv" id="lrv">0.003</span></label>
+    <label class="ctl">batch <select id="batch"><option>1</option><option>8</option><option>32</option></select></label>
+    <span class="cap" id="counts"></span>
+  </div>
+  <div class="curves">
+    <div><canvas id="cLoss" width="560" height="170"></canvas><div class="cap">loss per digit (faint) and its running average</div></div>
+    <div><canvas id="cAcc" width="560" height="170"></canvas><div class="cap">accuracy: <b>training</b>, last 200 digits (thin) · <b>held-out</b>, 1,000 test digits every 500 (thick)</div></div>
+  </div>
+  <div class="cap" style="margin-top:14px">Over training, for the first held-out 7: head 1's attention map · head 2's · the position table as similarities</div>
+  <div class="snaps" id="snaps"></div>
+  <div class="note">Each attention map is 16 × 16: row i is where token i looks. The similarity picture puts, at each patch slot, a 4 × 4 map of how alike that slot's row of the position table is to every other slot's (orange alike, blue opposite). In the ViT paper, trained on millions of images, these maps form a 2D grid: neighbours alike. Here, on 3,000 digits, no grid forms (measured: neighbouring slots are no more alike than distant ones), yet the model leans on position: switched off, its held-out accuracy falls from 82% to 34%. It uses each row as a label for its slot, not as a map.</div>
+  <div class="cap" style="margin-top:14px">Recent digits, with the guess made at the time</div>
+  <div class="thumbs" id="thumbs"></div>
+  <div class="ctrls" id="handoff"><button id="useBtn">Use these weights in the ViT explorer</button><button id="dlBtn">Download JSON</button><span class="cap" id="useMsg"></span></div>
+</section>
+
+<section id="s3">
+  <div class="head"><h2>CNN against ViT</h2><span class="n">held-out accuracy after 30,000 steps, by number of training digits</span>
+    <p>Both toys trained on the same few digits, 30,000 SGD steps each, at their own best learning rate. A convolution only combines neighbouring pixels, so a CNN starts out knowing that nearby pixels belong together; attention can join any two patches, so a ViT has to learn locality from the examples. With few examples that costs it a lot. Each dot is one run with its own seed; the lines join the averages.</p></div>
+  <div class="legend" id="legend"><span><i style="background:var(--cnn)"></i>CNN</span><span><i style="background:var(--vit)"></i>ViT</span><span><i class="hollow"></i>this page's race</span></div>
+  <div class="chartbox"><canvas id="cChart" width="640" height="300"></canvas></div>
+  <div class="note" id="chartNote"></div>
+  <div class="ctrls" style="margin-top:14px">
+    <label class="ctl">race on <select id="raceN"><option value="100" selected>100 digits</option><option value="300">300 digits</option><option value="1000">1,000 digits</option><option value="3000">3,000 digits</option></select></label>
+    <button id="racePlay" class="primary">Race</button><button id="raceReset">Restart</button>
+    <label class="ctl">speed <select id="raceSpeed"><option value="50">50 / s</option><option value="200" selected>200 / s</option></select></label>
+    <span class="cap" id="raceCounts"></span>
+  </div>
+  <div class="legend"><span><i style="background:var(--cnn)"></i>CNN</span><span><i style="background:var(--vit)"></i>ViT</span></div>
+  <div class="chartbox"><canvas id="cRace" width="640" height="220"></canvas></div>
+  <div class="note" id="raceNote"></div>
+</section>
+
+<section id="s4">
+  <div class="head"><h2>Terms</h2><span class="n">dotted words above point here</span>
+    <p>Hover or tap a dotted term anywhere above for the same definition in place.</p></div>
+  <div class="gloss" id="gloss"></div>
+</section>
+</main>
+<div id="tip" role="tooltip"></div>
+<div id="ctip"></div>
+
+<script type="module">
+import { SHAPES, T, D, DH, NC, P as PS, init, forward, tensor, lossAndGrad, sgdStep, averageGrads, accuracy, vitTrace, gradTrace, WEIGHT_KEYS, BACK_STAGES } from '../core/vit.js';
+import { parseMnist16, image } from '../core/data.js';
+import { shuffledOrder } from '../core/train.js';
+import { RACE, balancedSubset, racer } from '../core/race.js';
+import { drawGrid, fmt, maxAbs, cssVar } from '../ui/grid.js';
+import { createViews, line, arcs, paint, el } from '../ui/vitline.js';
+import { installTerms, VIT_TRAIN_TERMS } from '../ui/terms.js';
+import { saveTrainedViT } from '../ui/trained.js';
+const $ = (id) => document.getElementById(id);
+const pct = (x) => (100 * x).toFixed(1) + '%';
+const argmax = (p) => p.reduce((b, v, i) => (v > p[b] ? i : b), 0);
+const MILESTONES = [0, 300, 1000, 3000, 10000, 30000];
+const nz = (n) => n.toLocaleString('en-NZ');
+
+// ---------- state ----------
+let data = null, testIdx = [], fixedImg = null;
+let seed = 1, lr = 0.003, batch = 1, speed = 200;
+let weights = null, order = [], orderPos = 0, passes = 0, digitsSeen = 0;
+let cur = null;        // { i, input, label, phase (see P), S, loss, grads, back, pred, applied }
+let collected = [], shown = null, prevWeights = null;
+let probe = null;
+let lossRaw = [], lossEma = [], ema = null, trainFlags = [], accTrain = [], accTest = [], lastTest = null, snaps = [], recent = [];
+let playing = false, carry = 0, lastFrame = 0, lastDraw = 0, drawn = null;
+
+// ---------- the training step, in phases ----------
+// A digit goes through seven phases. Its gradient is computed in one go when the backward pass starts (core/vit.js);
+// the band then reveals it a stage at a time (BACK_STAGES), from the loss back towards the input.
+const P = { DIGIT: 0, FWD: 1, B0: 2, UPD: 6 };
+function loadDigit() {
+  if (orderPos >= order.length) { passes++; order = shuffledOrder(data.train.n, seed * 1000 + passes); orderPos = 0; }
+  const i = order[orderPos++];
+  cur = { i, input: image(data.train, i), label: data.train.labels[i], phase: P.DIGIT };
+}
+function doForward() {
+  const r = lossAndGrad(weights, cur.input, cur.label);
+  Object.assign(cur, { S: r.S, loss: r.loss, grads: r.grads, back: r.back, pred: argmax(r.S.prob), phase: P.FWD });
+}
+function doBackward() { collected.push(cur.grads); shown = collected.length === 1 ? cur.grads : averageGrads(collected); cur.phase = P.B0; }
+function doUpdate() {
+  if (collected.length >= batch) { prevWeights = weights; weights = sgdStep(weights, shown, lr); collected = []; cur.applied = true; }
+  else cur.applied = false;
+  cur.phase = P.UPD; digitsSeen++; record(cur);
+}
+function record(d) {
+  lossRaw.push([digitsSeen, d.loss]); ema = ema == null ? d.loss : ema + 0.02 * (d.loss - ema); lossEma.push([digitsSeen, ema]);
+  if (lossRaw.length > 4000) { lossRaw = lossRaw.filter((_, i) => i % 2 === 0); lossEma = lossEma.filter((_, i) => i % 2 === 0); }
+  trainFlags.push(d.pred === d.label); if (trainFlags.length > 200) trainFlags.shift();
+  recent.push({ input: d.input, label: d.label, pred: d.pred }); if (recent.length > 20) recent.shift();
+  if (digitsSeen % 20 === 0) accTrain.push([digitsSeen, trainFlags.filter(Boolean).length / trainFlags.length]);
+  if (digitsSeen % 500 === 0) evalTest();
+  if (MILESTONES.includes(digitsSeen)) snaps.push(snapshot(digitsSeen));
+}
+function evalTest() { lastTest = accuracy(weights, data.test, testIdx); accTest.push([digitsSeen, lastTest]); }
+const finishDigit = () => { if (cur.phase === P.DIGIT) doForward(); if (cur.phase === P.FWD) doBackward(); if (cur.phase < P.UPD) doUpdate(); };
+function advance() { finishDigit(); loadDigit(); doForward(); doBackward(); cur.phase = P.UPD - 1; } // play: each digit shown at the end of its backward pass
+function step() {
+  if (cur.phase === P.UPD) loadDigit(); else if (cur.phase === P.DIGIT) doForward(); else if (cur.phase === P.FWD) doBackward();
+  else if (cur.phase < P.UPD - 1) cur.phase++; else doUpdate();
+  renderAll();
+}
+function nextDigit() { finishDigit(); loadDigit(); doForward(); renderAll(); }
+function reset({ newSeed = false } = {}) {
+  if (newSeed) seed++;
+  weights = init(seed); order = shuffledOrder(data.train.n, seed * 1000); orderPos = 0; passes = 0; digitsSeen = 0;
+  collected = []; shown = null; prevWeights = null; probe = null;
+  lossRaw = []; lossEma = []; ema = null; trainFlags = []; accTrain = []; accTest = []; recent = [];
+  snaps = [snapshot(0)];
+  evalTest(); loadDigit(); renderAll();
+}
+/** Both heads' attention maps for the fixed digit, and the position table's similarities laid out on the patch grid. */
+function snapshot(at) {
+  const S = forward(weights, fixedImg), pos = weights.pos;
+  const cos = (a, b) => { let s = 0, na = 0, nb = 0; for (let d = 0; d < D; d++) { s += a[d] * b[d]; na += a[d] * a[d]; nb += b[d] * b[d]; } return s / Math.sqrt(na * nb || 1); };
+  const sim = new Float32Array(T * T); // slot i's 4 × 4 map sits at the slot's place on the patch grid
+  for (let i = 0; i < T; i++) for (let j = 0; j < T; j++) sim[((i >> 2) * 4 + (j >> 2)) * T + (i & 3) * 4 + (j & 3)] = cos(pos[i], pos[j]);
+  return { at, att: S.att.map((A) => Float32Array.from(A.flat())), sim };
+}
+
+// ---------- play ----------
+function frame(ts) {
+  if (!playing) return;
+  const dt = lastFrame ? Math.min(0.1, (ts - lastFrame) / 1000) : 0; lastFrame = ts;
+  carry = Math.min(carry + speed * dt, Math.max(1, speed / 10));
+  const t0 = performance.now();
+  while (carry >= 1 && performance.now() - t0 < 12) { advance(); carry -= 1; }
+  if (ts - lastDraw > 100) { if (cur !== drawn) { drawn = cur; renderAll(); } else renderPlay(); lastDraw = ts; } // the band follows, at most 10 times a second
+  requestAnimationFrame(frame);
+}
+function setPlaying(p) {
+  playing = p; $('playBtn').textContent = p ? 'Pause' : 'Play';
+  if (p) { setRacing(false); finishBackward(); lastFrame = 0; carry = 0; drawn = cur; renderAll(); requestAnimationFrame(frame); }
+  else renderAll();
+}
+function finishBackward() { if (cur.phase === P.DIGIT) doForward(); if (cur.phase === P.FWD) doBackward(); if (cur.phase < P.UPD - 1) cur.phase = P.UPD - 1; }
+// the weights the gradient is applied to (before the update; once applied, the ones it was applied to), and w′
+const wBefore = () => (cur.phase === P.UPD && cur.applied && prevWeights ? prevWeights : weights);
+const wPrime = () => (cur.phase === P.UPD && cur.applied ? weights : shown ? sgdStep(weights, shown, lr) : weights);
+
+// ---------- One step: the ViT line in three rows ----------
+// Keys are namespaced: a SHAPES key in the forward row, 'd' + key for its gradient, 'n' + key for an updated weight.
+const base = (key) => (SHAPES[key] ? key : key.slice(1));
+const { views, view, kOf } = createViews({ shapeOf: (key) => SHAPES[base(key)], onProbe: setProbe });
+function setProbe(p) { if (JSON.stringify(p) !== JSON.stringify(probe)) { probe = p; renderNet(); } }
+const A = 8, Wc = 6; // cell sizes, px: activations, weights (the explorer overview's)
+const STAGE_OF = {}; BACK_STAGES.forEach((s, k) => [...s.act, ...s.w].forEach((key) => { STAGE_OF[key] = k; }));
+function build() {
+  const R = [[], [], []]; // forward, backward, update
+  const add = (f, b, u) => { R[0].push(f); R[1].push(b); R[2].push(u); };
+  const op = (s, id) => add({ op: s, id }, { op: s ? '←' : '' }, null);
+  const act = (key, lb, cell = A, o = {}) => add({ v: [view(key, cell, o)], lb, id: o.id }, key === 'digit' ? null : { v: [view('d' + key, cell)], lb: '∂L/∂' + lb }, null);
+  const wts = (keys, lb, cell = Wc, grid) => add(...['', 'd', 'n'].map((ns, row) => ({ v: keys.map((k) => view(ns + k, cell)), w: true, grid, lb: row === 1 ? '∂L/∂' + lb : row === 2 ? lb + '′' : lb })));
+  const kernels = (ns) => { const g = el('kg'); g.style.gridTemplateColumns = 'repeat(2, auto)'; for (let d = 0; d < D; d++) g.append(view(ns + 'Wp', Wc, { rows: PS, cols: PS, map: (r, c) => [d, r * PS + c] })); return [g, view(ns + 'bp', Wc)]; };
+  const hc = (key, h) => view(key, A, { cols: DH, map: (r, c) => [r, h * DH + c] });
+  const hr = (key, h) => view(key, A, { rows: DH, cols: T, map: (r, c) => [c, h * DH + r] });
+  act('digit', 'digit', A, { blocks: PS }); op('⋆');
+  add(...['', 'd', 'n'].map((ns, row) => ({ v: kernels(ns), w: true, lb: ['kernels', '∂L/∂kernels', 'kernels′'][row] }))); op('=');
+  act('xp', 'tokens'); op('+'); wts(['pos'], 'position', A); op('=');
+  act('z0', 'z₀', A, { id: 'z0' }); op('LN'); wts(['ln1'], 'LN₁'); op('='); act('h1', 'LN₁(z₀)'); op('·');
+  wts(['Wq', 'Wk', 'Wv', 'bq', 'bk', 'bv'], 'Wq Wk Wv', Wc, 3); op('=');
+  for (let h = 0; h < 2; h++) {
+    add({ v: [hc('q', h)], lb: `Q${h + 1}` }, { v: [hc('dq', h)], lb: `∂L/∂Q${h + 1}` }, null); op('·');
+    add({ up: [hr('k', h), hr('v', h)], v: [view('att' + h, A)], lb: `head ${h + 1}` }, { up: [hr('dk', h), hr('dv', h)], v: [view('datt' + h, A)], lb: `∂L/∂A, head ${h + 1}` }, null); op('=');
+    add({ v: [hc('o', h)], lb: 'A·V' }, { v: [hc('do', h)], lb: '∂L/∂(A·V)' }, null); op(h ? '·' : '');
+  }
+  wts(['Wo', 'bo'], 'Wo'); op('+', 'add1');
+  act('z1', 'z₁', A, { id: 'z1' }); op('LN'); wts(['ln2'], 'LN₂'); op('='); act('h2', 'LN₂(z₁)'); op('·');
+  wts(['W1', 'b1'], 'W₁'); op('='); act('hid', 'hidden'); op('·');
+  wts(['W2', 'b2'], 'W₂', 4); op('+', 'add2'); act('z2', 'z₂'); op('mean');
+  act('avg', 'average'); op('LN'); wts(['lnf'], 'LN'); op('=');
+  act('avgNorm', 'normalised'); op('·'); wts(['Wh', 'bh'], 'W head'); op('=');
+  add({ v: [view('prob', 1, { rows: NC, cols: 1, map: (r) => [0, r], bars: true, px: [120, T * A] })], lb: 'classes' },
+    { v: [view('dprob', A, { rows: NC, cols: 1, map: (r) => [0, r] })], lb: '∂L/∂scores = p − y' }, null);
+  line($('net'), R, A, { labels: ['forward', 'backward', 'update'] });
+}
+const layout = () => arcs($('net'), [['z0', 'add1'], ['z1', 'add2']]);
+
+function renderNet() {
+  if (!cur) return;
+  const ph = cur.phase, S = cur.S, wB = wBefore(), wP = ph >= P.B0 ? wPrime() : null, scale = {};
+  const shownStage = ph >= P.B0 ? Math.min(ph, P.UPD - 1) - P.B0 : -1; // the last stage revealed
+  const revealed = (key) => STAGE_OF[key] <= shownStage, front = (key) => !playing && ph < P.UPD && STAGE_OF[key] === shownStage;
+  const img2d = S ? S.img : Array.from({ length: 16 }, (_, r) => Array.from(cur.input.slice(r * 16, r * 16 + 16)));
+  const isGrad = probe && probe.t !== base(probe.t) && probe.t[0] === 'd', isW = probe && WEIGHT_KEYS.includes(base(probe.t));
+  const green = !probe || !S ? {} : isGrad || isW ? gradTrace(S, probe) : vitTrace(S, probe);
+  for (const v of views) {
+    const key = kOf(v), b = base(key), ns = key === b ? '' : key[0], weight = WEIGHT_KEYS.includes(b), [R, C] = SHAPES[b];
+    let M = null, faint = false;
+    if (ns === '') M = b === 'digit' ? img2d : weight ? tensor(b, null, wB) : S ? tensor(b, S, wB) : null;
+    else if (revealed(b)) M = ns === 'n' ? tensor(b, null, wP) : weight ? tensor(b, null, shown) : backTensor(b);
+    if (!M) { M = Array.from({ length: R }, () => new Array(C).fill(0)); faint = true; }
+    const sk = ns === 'd' ? key : b; // w and w′ share a colour scale; each gradient has its own
+    const s = b === 'digit' ? 1 : (scale[sk] ??= maxAbs((ns === 'n' ? tensor(b, null, wB) : M).flat()));
+    paint(v, M, C, green[key], s, {}, { gray: b === 'digit', faint, outline: ns !== '' && !faint && front(b) });
+  }
+  $('readout').innerHTML = describe(probe);
+}
+const backTensor = (b) => { const M = cur.back[b]; return Array.isArray(M[0]) ? M : [M]; };
+
+// ---------- readouts ----------
+const NAME = { digit: 'pixel', xp: 'patch token', z0: 'z₀', h1: 'LayerNorm 1 output', q: 'query', k: 'key', v: 'value', att0: 'head 1 attention', att1: 'head 2 attention',
+  o: 'heads joined', z1: 'z₁', h2: 'LayerNorm 2 output', hid: 'MLP hidden', z2: 'z₂', avg: 'average', avgNorm: 'normalised average', prob: 'class',
+  Wp: 'patch kernels', bp: 'patch bias', pos: 'position table', ln1: 'LayerNorm 1', ln2: 'LayerNorm 2', lnf: 'final LayerNorm', Wq: 'Wq', bq: 'bq', Wk: 'Wk', bk: 'bk',
+  Wv: 'Wv', bv: 'bv', Wo: 'Wo', bo: 'bo', W1: 'W₁', b1: 'b₁', W2: 'W₂', b2: 'b₂', Wh: 'W head', bh: 'head bias' };
+const HOW = { // how each activation's gradient is computed, from what is downstream of it
+  prob: 'p − y: this class\'s probability minus 1 if it is the label, 0 otherwise',
+  avgNorm: 'Σ over classes of W head[d, c] × ∂L/∂score(c)', avg: 'the final LayerNorm, backwards, from all 8 of ∂L/∂(normalised average)',
+  z2: '∂L/∂average[c] / 16: every token gets a sixteenth of the average\'s gradient', hid: 'Σ over columns of W₂[f, c] × ∂L/∂z₂[i, c]',
+  h2: 'Σ over the 32 hidden of W₁[d, f] × GELU′ × ∂L/∂hidden[i, f]', z1: '∂L/∂z₂[i, d] through the residual, plus LayerNorm 2 backwards from ∂L/∂h₂, row i',
+  o: 'Σ over columns of Wo[c, d] × ∂L/∂z₁[i, d]', att0: 'Σ over its head\'s 4 columns of ∂L/∂(A·V)[i, c] × value[j, c]', att1: 'Σ over its head\'s 4 columns of ∂L/∂(A·V)[i, c] × value[j, c]',
+  v: 'Σ over queries i of A[i, j] × ∂L/∂(A·V)[i, c]: every query that read this token, in proportion to how much it read',
+  k: 'Σ over queries i of ∂L/∂s[i, j] × query[i, c] / 2, with ∂L/∂s = A ⊙ (∂L/∂A − Σ A·∂L/∂A), the softmax backwards: a column of the map',
+  q: 'Σ over keys j of ∂L/∂s[i, j] × key[j, c] / 2: its own row of the map', h1: '∂L/∂Q · Wqᵀ + ∂L/∂K · Wkᵀ + ∂L/∂V · Wvᵀ, row i',
+  z0: '∂L/∂z₁[i, d] through the residual, plus LayerNorm 1 backwards from ∂L/∂h₁, row i', xp: 'equal to ∂L/∂z₀: z₀ = tokens + position' };
+const IN_OUT = { Wq: ['LayerNorm 1 output', 'query'], Wk: ['LayerNorm 1 output', 'key'], Wv: ['LayerNorm 1 output', 'value'], Wo: ['heads joined', 'z₁'], W1: ['LayerNorm 2 output', 'hidden'], W2: ['hidden', 'z₂'], Wh: ['normalised average', 'score'] };
+function describe(p) {
+  if (!p) {
+    if (playing) return `Playing at ${speed} digits a second: the band shows a digit at the end of its backward pass${speed > 10 ? `, about one in ${Math.round(speed / 10)}` : ''}. Hover any value to follow it from digit to digit.`;
+    if (cur.phase === P.DIGIT) return 'A new digit. Step runs the forward pass.';
+    if (cur.phase === P.FWD) return `Forward done: the guess is ${cur.pred}, the label ${cur.label}, the loss −log p(${cur.label}) = ${fmt(cur.loss)}. Step starts the backward pass at the scores.`;
+    if (cur.phase < P.UPD) return `Backward through the ${BACK_STAGES[cur.phase - P.B0].name}: the green frames mark what this step computed. Hover any value for how.`;
+    return cur.applied ? `Updated: every weight moved by −${lr} × its gradient. Step loads the next digit.` : `Gradient collected (${collected.length}/${batch}); the weights move once the batch is full.`;
+  }
+  const b = base(p.t), ns = p.t === b ? '' : p.t[0], name = NAME[b] || b, S = cur.S;
+  if (WEIGHT_KEYS.includes(b)) {
+    const w0 = tensor(b, null, wBefore())[p.r][p.c], g = shown ? tensor(b, null, shown)[p.r][p.c] : null, io = IN_OUT[b];
+    const how = io ? `Σ over the 16 tokens of ${io[0]}[t, ${p.r}] × ∂L/∂${io[1]}[t, ${p.c}]` : 'the sum of the gradients it was added to';
+    const f4 = (x) => (x === 0 ? '0' : Math.abs(x) < 1e-4 ? x.toExponential(1) : x.toFixed(4)); // a step is often under 0.01
+    return `<b>${name} [${p.r}, ${p.c}]</b> w = ${f4(w0)}` + (g == null ? '' : `\n∂L/∂w = ${how} = <span class="sum">${fmt(g)}</span>\nw′ = w − ${lr} × ∂L/∂w = ${f4(w0)} − ${f4(lr * g)} = <span class="sum">${f4(w0 - lr * g)}</span>`);
+  }
+  if (!S) return 'Step runs the forward pass first.';
+  if (ns === 'd') return `<b>∂L/∂${name}</b> [${p.r}, ${p.c}] = <span class="sum">${fmt(backTensor(b)[p.r][p.c])}</span>\n= ${HOW[b]}`;
+  const val = b === 'digit' ? S.img[p.r][p.c] : tensor(b, S, wBefore())[p.r][p.c];
+  return `<b>${name}</b> [${p.r}, ${p.c}] = ${fmt(val)}` + (b === 'prob' ? ` (${pct(val)})` : '') + '. Green: what it is computed from, upstream.';
+}
+const STEP_LABEL = ['Step: forward', 'Step: backward from the loss, through the head', 'Step: backward through the MLP', 'Step: backward through attention', 'Step: backward to the embedding', 'Step: update', 'Step: load the next digit'];
+function renderPhase() {
+  $('phase').querySelectorAll('b').forEach((b) => { const p = +b.dataset.p; b.classList.toggle('done', p <= cur.phase); b.classList.toggle('next', p === cur.phase + 1); });
+  $('digitInfo').textContent = `training digit ${cur.i} · label ${cur.label}` + (cur.phase >= P.FWD ? ` · guess ${cur.pred} ${cur.pred === cur.label ? '✓' : '✗'}` : '') + (batch > 1 ? ` · batch ${collected.length}/${batch} collected` : '');
+  $('stepBtn').textContent = STEP_LABEL[cur.phase];
+}
+
+// ---------- Many steps: curves, snapshots, recent digits ----------
+const niceStep = (xmax) => { const raw = Math.max(1, xmax / 5); const p = Math.pow(10, Math.floor(Math.log10(raw))); const m = raw / p; return (m < 2 ? 2 : m < 5 ? 5 : 10) * p; };
+/** Lines on a canvas: series [{ pts: [[x, y]], color, width, alpha }], x from 0 to xmax, y from 0 to ymax; recessive axes. */
+function curve(cv, series, { xmax, ymax, yfmt, ylines, right = 10 }) {
+  const ctx = cv.getContext('2d'), W = cv.width, H = cv.height, L = 38, R = right, Tm = 8, B = 22;
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, W, H);
+  const X = (x) => L + (W - L - R) * x / xmax, Y = (y) => H - B - (H - Tm - B) * Math.min(1, y / ymax);
+  ctx.font = `11px ${getComputedStyle(document.body).fontFamily}`; ctx.fillStyle = cssVar('--ink2'); ctx.strokeStyle = cssVar('--line'); ctx.lineWidth = 1;
+  for (const y of ylines) { ctx.beginPath(); ctx.moveTo(L, Y(y) + .5); ctx.lineTo(W - R, Y(y) + .5); ctx.stroke(); ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(yfmt(y), L - 5, Y(y)); }
+  const st = niceStep(xmax); ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (let x = 0; x <= xmax; x += st) ctx.fillText(nz(x), X(x), H - B + 5);
+  for (const s of series) {
+    if (!s.pts.length) continue;
+    ctx.strokeStyle = s.color; ctx.lineWidth = s.width; ctx.globalAlpha = s.alpha ?? 1; ctx.beginPath();
+    s.pts.forEach(([x, y], k) => (k ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y)))); ctx.stroke(); ctx.globalAlpha = 1;
+    if (s.dots) { ctx.fillStyle = s.color; s.pts.forEach(([x, y]) => { ctx.beginPath(); ctx.arc(X(x), Y(y), 3, 0, 7); ctx.fill(); }); }
+    if (s.label) { const [x, y] = s.pts[s.pts.length - 1]; ctx.fillStyle = cssVar('--ink2'); ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(s.label, X(x) + 6, Y(y) + (s.nudge || 0)); }
+  }
+}
+function renderPlay() {
+  const xmax = Math.max(500, digitsSeen);
+  curve($('cLoss'), [{ pts: lossRaw, color: cssVar('--accent'), width: 1, alpha: 0.25 }, { pts: lossEma, color: cssVar('--accent'), width: 2 }], { xmax, ymax: 3, yfmt: (y) => fmt(y), ylines: [0, 1, 2, 3] });
+  curve($('cAcc'), [{ pts: accTrain, color: cssVar('--accent'), width: 1 }, { pts: accTest, color: cssVar('--accent'), width: 2.5, dots: true }], { xmax, ymax: 1, yfmt: (y) => `${y * 100}%`, ylines: [0, 0.25, 0.5, 0.75, 1] });
+  $('counts').textContent = `${nz(digitsSeen)} digits seen · pass ${passes + 1} · held-out ${lastTest == null ? '–' : pct(lastTest)}`;
+}
+function renderSnaps() {
+  const box = $('snaps'); box.innerHTML = '';
+  for (const s of [...snaps, { ...snapshot('now'), now: true }]) {
+    const d = el(''), trio = el('trio');
+    for (const A of s.att) { const cv = document.createElement('canvas'); cv.width = cv.height = 64; cv.style.width = cv.style.height = '64px'; drawGrid(cv, A, T, T, { mode: 'div', scale: Math.max(...A), lines: false }); trio.append(cv); }
+    const cv = document.createElement('canvas'); cv.width = cv.height = 64; cv.style.width = cv.style.height = '64px'; drawGrid(cv, s.sim, T, T, { mode: 'div', scale: 1, lines: false, blocks: 4 }); trio.append(cv);
+    d.append(trio, el('', s.now ? `now (${nz(digitsSeen)})` : `${nz(s.at)} digits`)); box.append(d);
+  }
+  const th = $('thumbs'); th.innerHTML = '';
+  for (const r of recent) {
+    const d = el(''), cv = document.createElement('canvas'); cv.width = cv.height = 32; cv.style.width = cv.style.height = '32px';
+    drawGrid(cv, r.input, 16, 16, { lines: false });
+    const g = el(r.pred === r.label ? 'ok' : 'no', `${r.pred}${r.pred === r.label ? '✓' : '✗'}`); d.append(cv, g); th.append(d);
+  }
+}
+function renderAll() { if (!cur) return; renderPhase(); renderNet(); renderPlay(); renderSnaps(); }
+
+// ---------- hand-off to the explorer ----------
+function bundle() {
+  const every = [...Array(data.test.n).keys()];
+  return { version: 1, arch: 'vit16', weights, meta: { source: 'vit-train', digits: digitsSeen, passes, optimiser: 'sgd', lr, batch,
+    testAcc: +accuracy(weights, data.test, every).toFixed(4), testAccNoPos: +accuracy(weights, data.test, every, { position: false }).toFixed(4), date: new Date().toLocaleDateString('en-CA') } };
+}
+$('useBtn').onclick = () => {
+  const o = bundle();
+  try { saveTrainedViT(o); $('useMsg').innerHTML = `Stored (held-out ${pct(o.meta.testAcc)}). The <a href="../vit/">ViT explorer</a> will use these weights until you go back to the shipped ones there.`; }
+  catch { $('useMsg').textContent = 'Could not store the weights: this browser blocks local storage. Download JSON still works.'; }
+};
+$('dlBtn').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(bundle())], { type: 'application/json' })); a.download = `vit16-${digitsSeen}-digits.json`; a.click(); URL.revokeObjectURL(a.href); };
+
+// ---------- CNN against ViT: the measured chart and the live race ----------
+let measured = null, raceDots = [], race = null, racing = false, raceSeed = 6, raceLast = 0, raceCarry = 0;
+const chartDots = []; // for the hover tooltip: { x, y, text }
+function drawChart() {
+  const cv = $('cChart'), ctx = cv.getContext('2d'), W = cv.width, H = cv.height, L = 44, R = 70, Tm = 12, B = 30;
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, W, H); chartDots.length = 0;
+  if (!measured) return;
+  const lo = Math.log10(measured.sizes[0]), hi = Math.log10(measured.sizes[measured.sizes.length - 1]);
+  const X = (n) => L + (W - L - R) * (Math.log10(n) - lo) / (hi - lo), Y = (a) => H - B - (H - Tm - B) * (a - 0.3) / 0.6;
+  ctx.font = `11px ${getComputedStyle(document.body).fontFamily}`; ctx.strokeStyle = cssVar('--line'); ctx.fillStyle = cssVar('--ink2'); ctx.lineWidth = 1;
+  for (const a of [0.3, 0.45, 0.6, 0.75, 0.9]) { ctx.beginPath(); ctx.moveTo(L, Y(a) + .5); ctx.lineTo(W - R, Y(a) + .5); ctx.stroke(); ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(`${Math.round(a * 100)}%`, L - 6, Y(a)); }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (const n of measured.sizes) ctx.fillText(`${nz(n)} digits`, X(n), H - B + 8);
+  const surface = cssVar('--panel'), mean = (r) => r.reduce((a, b) => a + b, 0) / r.length;
+  const above = mean(measured.cnn.at(-1)) >= mean(measured.vit.at(-1)) ? 'cnn' : 'vit';
+  for (const [kind, k] of [['cnn', -1], ['vit', 1]]) {
+    const color = cssVar('--' + kind), rows = measured[kind], means = rows.map(mean);
+    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath(); means.forEach((m, i) => (i ? ctx.lineTo(X(measured.sizes[i]) + k * 7, Y(m)) : ctx.moveTo(X(measured.sizes[i]) + k * 7, Y(m)))); ctx.stroke();
+    rows.forEach((r, i) => r.forEach((a, s) => {
+      const x = X(measured.sizes[i]) + k * 7 + (s - 2) * 2.5, y = Y(a);
+      ctx.beginPath(); ctx.arc(x, y, 4, 0, 7); ctx.fillStyle = color; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = surface; ctx.stroke();
+      chartDots.push({ x, y, text: `${kind === 'cnn' ? 'CNN' : 'ViT'}, ${nz(measured.sizes[i])} digits, seed ${measured.seeds[s]}: ${pct(a)}` });
+    }));
+    means.forEach((m, i) => chartDots.push({ x: X(measured.sizes[i]) + k * 7, y: Y(m), text: `${kind === 'cnn' ? 'CNN' : 'ViT'} average over ${measured.seeds.length} seeds, ${nz(measured.sizes[i])} digits: ${pct(m)}` }));
+    const last = means.length - 1; ctx.fillStyle = cssVar('--ink2'); ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(kind === 'cnn' ? 'CNN' : 'ViT', X(measured.sizes[last]) + 18, Y(means[last]) + (kind === above ? -8 : 8));
+  }
+  for (const d of raceDots) for (const [kind, k] of [['cnn', -1], ['vit', 1]]) {
+    const x = X(d.n) + k * 7, y = Y(d[kind]);
+    ctx.beginPath(); ctx.arc(x, y, 6, 0, 7); ctx.lineWidth = 2; ctx.strokeStyle = cssVar('--' + kind); ctx.stroke();
+    chartDots.push({ x, y, text: `this page's race, ${kind === 'cnn' ? 'CNN' : 'ViT'}, ${nz(d.n)} digits, seed ${d.seed}: ${pct(d[kind])}` });
+  }
+}
+function chartNote() {
+  if (!measured) return 'Could not load models/vit_vs_cnn.json.';
+  const mean = (r) => r.reduce((a, b) => a + b, 0) / r.length;
+  const parts = measured.sizes.map((n, i) => {
+    const c = measured.cnn[i], v = measured.vit[i], ahead = c.filter((a, s) => a > v[s]).length;
+    return `${nz(n)} digits: CNN ${pct(mean(c))}, ViT ${pct(mean(v))}, the CNN ahead in ${ahead} of ${c.length} seeds`;
+  });
+  return `Averages over ${measured.seeds.length} seeds (${measured.date}): ${parts.join('; ')}. With few digits the CNN's locality wins clearly; from about 1,000 digits the two are level within the spread of the seeds, and single runs scatter by 10 points or more. Hover a dot for its run.`;
+}
+$('cChart').addEventListener('pointermove', (ev) => {
+  const b = ev.target.getBoundingClientRect(), x = ev.clientX - b.left, y = ev.clientY - b.top, tip = $('ctip');
+  const hit = chartDots.map((d) => ({ d, r: Math.hypot(d.x - x, d.y - y) })).sort((a, c) => a.r - c.r)[0];
+  if (hit && hit.r < 9) { tip.textContent = hit.d.text; tip.style.display = 'block'; tip.style.left = ev.clientX + 12 + 'px'; tip.style.top = ev.clientY + 12 + 'px'; } else tip.style.display = 'none';
+});
+$('cChart').addEventListener('pointerleave', () => { $('ctip').style.display = 'none'; });
+
+function newRace() {
+  const n = +$('raceN').value, idx = balancedSubset(data.train, n);
+  race = { n, seed: raceSeed, cnn: racer('cnn', data.train, idx, raceSeed), vit: racer('vit', data.train, idx, raceSeed), pts: { cnn: [], vit: [] }, done: false };
+  raceEval(); renderRace();
+}
+function raceEval() { for (const kind of ['cnn', 'vit']) race.pts[kind].push([race[kind].steps, race[kind].accuracy(data.test, testIdx)]); }
+function raceFrame(ts) {
+  if (!racing) return;
+  const sp = +$('raceSpeed').value, dt = raceLast ? Math.min(0.1, (ts - raceLast) / 1000) : 0; raceLast = ts;
+  raceCarry = Math.min(raceCarry + sp * dt, Math.max(1, sp / 10));
+  const t0 = performance.now();
+  while (raceCarry >= 1 && !race.done && performance.now() - t0 < 12) {
+    race.cnn.step(); race.vit.step(); raceCarry -= 1;
+    if (race.cnn.steps % 2000 === 0) raceEval();
+    if (race.cnn.steps >= RACE.steps) { race.done = true; const last = (k) => race.pts[k][race.pts[k].length - 1][1]; raceDots.push({ n: race.n, seed: race.seed, cnn: last('cnn'), vit: last('vit') }); drawChart(); setRacing(false); }
+  }
+  renderRace();
+  if (racing) requestAnimationFrame(raceFrame);
+}
+function setRacing(r) {
+  if (r && race.done) { raceSeed++; newRace(); }
+  racing = r; $('racePlay').textContent = r ? 'Pause' : race && race.cnn.steps > 0 && !race.done ? 'Resume' : 'Race';
+  if (r) { if (playing) setPlaying(false); raceLast = 0; raceCarry = 0; requestAnimationFrame(raceFrame); }
+}
+function renderRace() {
+  const lab = (k) => (race.pts[k].length ? `${k === 'cnn' ? 'CNN' : 'ViT'} ${pct(race.pts[k][race.pts[k].length - 1][1])}` : '');
+  const hiK = race.pts.cnn.length && race.pts.cnn.at(-1)[1] >= race.pts.vit.at(-1)[1] ? 'cnn' : 'vit';
+  curve($('cRace'), ['cnn', 'vit'].map((k) => ({ pts: race.pts[k], color: cssVar('--' + k), width: 2, dots: true, label: lab(k), nudge: k === hiK ? -7 : 7 })), { xmax: RACE.steps, ymax: 1, yfmt: (y) => `${y * 100}%`, ylines: [0, 0.25, 0.5, 0.75, 1], right: 80 });
+  $('raceCounts').textContent = `${nz(race.cnn.steps)} of ${nz(RACE.steps)} steps on ${nz(race.n)} digits · seed ${race.seed}`;
+  $('raceNote').textContent = race.done
+    ? `This race (seed ${race.seed}, ${nz(race.n)} digits): CNN ${pct(race.pts.cnn.at(-1)[1])}, ViT ${pct(race.pts.vit.at(-1)[1])}, now hollow dots on the chart above: one more run among the measured ones. Race again for a new seed.`
+    : `Both models train on the same ${nz(race.n)} digits in the same order, each at its own learning rate (CNN ${RACE.lr.cnn}, ViT ${RACE.lr.vit}); held-out accuracy every 2,000 steps. One run is one dot: at 100 digits the CNN won in every measured seed, at 1,000 and above either can win.`;
+}
+$('racePlay').onclick = () => setRacing(!racing);
+$('raceReset').onclick = () => { setRacing(false); raceSeed++; newRace(); $('racePlay').textContent = 'Race'; };
+$('raceN').onchange = () => { setRacing(false); newRace(); $('racePlay').textContent = 'Race'; };
+
+// ---------- controls ----------
+const lrOf = (v) => +(0.0003 * Math.pow(1000, v / 100)).toPrecision(1);
+$('stepBtn').onclick = () => { if (playing) setPlaying(false); step(); };
+$('nextBtn').onclick = () => { if (playing) setPlaying(false); nextDigit(); };
+$('playBtn').onclick = () => setPlaying(!playing);
+$('resetBtn').onclick = () => { setPlaying(false); reset({ newSeed: true }); };
+$('speed').onchange = (e) => { speed = +e.target.value; };
+$('lr').oninput = (e) => { lr = lrOf(+e.target.value); $('lrv').textContent = String(lr); if (!playing) renderNet(); };
+$('batch').onchange = (e) => { batch = +e.target.value; collected = []; shown = null; if (cur && cur.phase >= P.B0 && cur.phase < P.UPD) cur.phase = P.FWD; renderAll(); };
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { renderAll(); drawChart(); if (race) renderRace(); });
+addEventListener('resize', layout);
+
+// ---------- start ----------
+async function start() {
+  installTerms({ selectors: '.lede, .head p, .note:not(#status):not(#chartNote):not(#raceNote)', tip: $('tip'), gloss: $('gloss'), terms: VIT_TRAIN_TERMS });
+  const [bin, js] = await Promise.all([
+    fetch('../data/mnist16.bin').then((r) => (r.ok ? r.arrayBuffer() : null)).catch(() => null),
+    fetch('../models/vit_vs_cnn.json').then((r) => (r.ok ? r.json() : null)).catch(() => null),
+  ]);
+  if (!bin) { $('status').textContent = 'Could not load the digits (data/mnist16.bin); this page needs to be served over http.'; return; }
+  data = parseMnist16(bin); testIdx = [...Array(data.test.n).keys()];
+  fixedImg = image(data.test, testIdx.find((i) => data.test.labels[i] === 7));
+  measured = js && js.version === 1 ? js : null;
+  $('status').textContent = `${nz(data.train.n)} training and ${nz(data.test.n)} held-out digits loaded.`;
+  build(); reset(); layout(); document.fonts.ready.then(layout);
+  drawChart(); $('chartNote').textContent = chartNote(); newRace();
+}
+const ready = start();
+</script>
+</body>
+</html>
