@@ -39,7 +39,7 @@ p{margin:0 0 10px;max-width:68ch}
 .lede{color:var(--ink2);font-size:15.5px;margin-bottom:10px;max-width:none}
 .keys{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--ink2);margin-bottom:18px}
 .keys span{display:inline-flex;align-items:center;gap:6px}
-.keys i{display:inline-block;width:14px;height:14px;border-radius:3px;border:3px solid var(--hl2);background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--hl2) 45%,transparent))}
+.keys i{flex:none;display:inline-block;width:14px;height:14px;border-radius:3px;border:3px solid var(--hl2);background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--hl2) 45%,transparent))}
 .keys i.front{border-width:2px;background:transparent}
 .keys i.wt{border:1px solid var(--accent);background:var(--wtint)}
 section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin-bottom:22px}
@@ -123,7 +123,7 @@ main a{color:var(--accent)}
   </div>
   <div class="cap" style="margin-top:14px">Over training, for the first held-out 7: head 1's attention map · head 2's · the position table as similarities</div>
   <div class="snaps" id="snaps"></div>
-  <div class="note">Each attention map is 16 × 16: row i is where token i looks. The similarity picture puts, at each patch slot, a 4 × 4 map of how alike that slot's row of the position table is to every other slot's (orange alike, blue opposite). In the ViT paper, trained on millions of images, these maps form a 2D grid: neighbours alike. Here, on 3,000 digits, no grid forms (measured: neighbouring slots are no more alike than distant ones), yet the model leans on position: switched off, its held-out accuracy falls from 82% to 34%. It uses each row as a label for its slot, not as a map.</div>
+  <div class="note">Each attention map is 16 × 16: row i is where token i looks. The similarity picture puts, at each patch slot, a 4 × 4 map of how alike that slot's row of the position table is to every other slot's (orange alike, blue opposite). In the ViT paper, trained on millions of images, these maps form a 2D grid: neighbours alike. Here, on 3,000 digits, no grid forms (measured: neighbouring slots are no more alike than distant ones), yet the model leans on position: switched off, the held-out accuracy of the explorer's shipped weights (one run) falls from 82% to 34%. It uses each row as a label for its slot, not as a map.</div>
   <div class="cap" style="margin-top:14px">Recent digits, with the guess made at the time</div>
   <div class="thumbs" id="thumbs"></div>
   <div class="ctrls" id="handoff"><button id="useBtn">Use these weights in the ViT explorer</button><button id="dlBtn">Download JSON</button><span class="cap" id="useMsg"></span></div>
@@ -187,7 +187,7 @@ const P = { DIGIT: 0, FWD: 1, B0: 2, UPD: 6 };
 function loadDigit() {
   if (orderPos >= order.length) { passes++; order = shuffledOrder(data.train.n, seed * 1000 + passes); orderPos = 0; }
   const i = order[orderPos++];
-  cur = { i, input: image(data.train, i), label: data.train.labels[i], phase: P.DIGIT };
+  cur = { i, input: image(data.train, i), label: data.train.labels[i], phase: P.DIGIT }; shown = null;
 }
 function doForward() {
   const r = lossAndGrad(weights, cur.input, cur.label);
@@ -304,7 +304,7 @@ function renderNet() {
     const key = kOf(v), b = base(key), ns = key === b ? '' : key[0], weight = WEIGHT_KEYS.includes(b), [R, C] = SHAPES[b];
     let M = null, faint = false;
     if (ns === '') M = b === 'digit' ? img2d : weight ? tensor(b, null, wB) : S ? tensor(b, S, wB) : null;
-    else if (revealed(b)) M = ns === 'n' ? tensor(b, null, wP) : weight ? tensor(b, null, shown) : backTensor(b);
+    else if (revealed(b)) M = ns === 'n' ? tensor(b, null, wP) : weight ? (shown ? tensor(b, null, shown) : null) : backTensor(b);
     if (!M) { M = Array.from({ length: R }, () => new Array(C).fill(0)); faint = true; }
     const sk = ns === 'd' ? key : b; // w and w′ share a colour scale; each gradient has its own
     const s = b === 'digit' ? 1 : (scale[sk] ??= maxAbs((ns === 'n' ? tensor(b, null, wB) : M).flat()));
@@ -340,7 +340,7 @@ function describe(p) {
   }
   const b = base(p.t), ns = p.t === b ? '' : p.t[0], name = NAME[b] || b, S = cur.S;
   if (WEIGHT_KEYS.includes(b)) {
-    const w0 = tensor(b, null, wBefore())[p.r][p.c], g = shown ? tensor(b, null, shown)[p.r][p.c] : null, io = IN_OUT[b];
+    const w0 = tensor(b, null, wBefore())[p.r][p.c], g = shown && cur.phase >= P.B0 ? tensor(b, null, shown)[p.r][p.c] : null, io = IN_OUT[b];
     const how = io ? `Σ over the 16 tokens of ${io[0]}[t, ${p.r}] × ∂L/∂${io[1]}[t, ${p.c}]` : 'the sum of the gradients it was added to';
     const f4 = (x) => (x === 0 ? '0' : Math.abs(x) < 1e-4 ? x.toExponential(1) : x.toFixed(4)); // a step is often under 0.01
     return `<b>${name} [${p.r}, ${p.c}]</b> w = ${f4(w0)}` + (g == null ? '' : `\n∂L/∂w = ${how} = <span class="sum">${fmt(g)}</span>\nw′ = w − ${lr} × ∂L/∂w = ${f4(w0)} − ${f4(lr * g)} = <span class="sum">${f4(w0 - lr * g)}</span>`);
@@ -425,13 +425,14 @@ function drawChart() {
   for (const a of [0.3, 0.45, 0.6, 0.75, 0.9]) { ctx.beginPath(); ctx.moveTo(L, Y(a) + .5); ctx.lineTo(W - R, Y(a) + .5); ctx.stroke(); ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(`${Math.round(a * 100)}%`, L - 6, Y(a)); }
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   for (const n of measured.sizes) ctx.fillText(`${nz(n)} digits`, X(n), H - B + 8);
+  const clampY = (a) => Y(Math.min(0.9, Math.max(0.3, a)));
   const surface = cssVar('--panel'), mean = (r) => r.reduce((a, b) => a + b, 0) / r.length;
   const above = mean(measured.cnn.at(-1)) >= mean(measured.vit.at(-1)) ? 'cnn' : 'vit';
   for (const [kind, k] of [['cnn', -1], ['vit', 1]]) {
     const color = cssVar('--' + kind), rows = measured[kind], means = rows.map(mean);
     ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath(); means.forEach((m, i) => (i ? ctx.lineTo(X(measured.sizes[i]) + k * 7, Y(m)) : ctx.moveTo(X(measured.sizes[i]) + k * 7, Y(m)))); ctx.stroke();
     rows.forEach((r, i) => r.forEach((a, s) => {
-      const x = X(measured.sizes[i]) + k * 7 + (s - 2) * 2.5, y = Y(a);
+      const x = X(measured.sizes[i]) + k * 7 + (s - 2) * 2.5, y = clampY(a);
       ctx.beginPath(); ctx.arc(x, y, 4, 0, 7); ctx.fillStyle = color; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = surface; ctx.stroke();
       chartDots.push({ x, y, text: `${kind === 'cnn' ? 'CNN' : 'ViT'}, ${nz(measured.sizes[i])} digits, seed ${measured.seeds[s]}: ${pct(a)}` });
     }));
@@ -440,7 +441,7 @@ function drawChart() {
     ctx.fillText(kind === 'cnn' ? 'CNN' : 'ViT', X(measured.sizes[last]) + 18, Y(means[last]) + (kind === above ? -8 : 8));
   }
   for (const d of raceDots) for (const [kind, k] of [['cnn', -1], ['vit', 1]]) {
-    const x = X(d.n) + k * 7, y = Y(d[kind]);
+    const x = X(d.n) + k * 7, y = clampY(d[kind]);
     ctx.beginPath(); ctx.arc(x, y, 6, 0, 7); ctx.lineWidth = 2; ctx.strokeStyle = cssVar('--' + kind); ctx.stroke();
     chartDots.push({ x, y, text: `this page's race, ${kind === 'cnn' ? 'CNN' : 'ViT'}, ${nz(d.n)} digits, seed ${d.seed}: ${pct(d[kind])}` });
   }
@@ -452,7 +453,12 @@ function chartNote() {
     const c = measured.cnn[i], v = measured.vit[i], ahead = c.filter((a, s) => a > v[s]).length;
     return `${nz(n)} digits: CNN ${pct(mean(c))}, ViT ${pct(mean(v))}, the CNN ahead in ${ahead} of ${c.length} seeds`;
   });
-  return `Averages over ${measured.seeds.length} seeds (${measured.date}): ${parts.join('; ')}. With few digits the CNN's locality wins clearly; from about 1,000 digits the two are level within the spread of the seeds, and single runs scatter by 10 points or more. Hover a dot for its run.`;
+  const sweep = [], mixed = [];
+  measured.sizes.forEach((n, i) => { const k = measured.cnn[i].filter((a, s) => a > measured.vit[i][s]).length; (k === measured.cnn[i].length ? sweep : mixed).push(nz(n)); });
+  const list = (a) => (a.length > 1 ? `${a.slice(0, -1).join(', ')} and ${a.at(-1)}` : a[0]);
+  const spread = Math.max(...['cnn', 'vit'].flatMap((k) => measured[k].map((r) => Math.max(...r) - Math.min(...r)))) * 100;
+  const verdict = [sweep.length ? `the CNN is ahead in every seed at ${list(sweep)} digits` : '', mixed.length ? `at ${list(mixed)} digits either can win` : ''].filter(Boolean).join('; ');
+  return `Averages over ${measured.seeds.length} seeds (${measured.date}): ${parts.join('; ')}. In these runs ${verdict}; single runs of one model at one size scatter by up to ${spread.toFixed(1)} points. Hover a dot for its run.`;
 }
 $('cChart').addEventListener('pointermove', (ev) => {
   const b = ev.target.getBoundingClientRect(), x = ev.clientX - b.left, y = ev.clientY - b.top, tip = $('ctip');
@@ -490,9 +496,11 @@ function renderRace() {
   const hiK = race.pts.cnn.length && race.pts.cnn.at(-1)[1] >= race.pts.vit.at(-1)[1] ? 'cnn' : 'vit';
   curve($('cRace'), ['cnn', 'vit'].map((k) => ({ pts: race.pts[k], color: cssVar('--' + k), width: 2, dots: true, label: lab(k), nudge: k === hiK ? -7 : 7 })), { xmax: RACE.steps, ymax: 1, yfmt: (y) => `${y * 100}%`, ylines: [0, 0.25, 0.5, 0.75, 1], right: 80 });
   $('raceCounts').textContent = `${nz(race.cnn.steps)} of ${nz(RACE.steps)} steps on ${nz(race.n)} digits · seed ${race.seed}`;
+  const mi = measured ? measured.sizes.indexOf(race.n) : -1;
+  const own = mi >= 0 ? ` At ${nz(race.n)} digits the CNN was ahead in ${measured.cnn[mi].filter((a, s) => a > measured.vit[mi][s]).length} of ${measured.cnn[mi].length} measured seeds.` : '';
   $('raceNote').textContent = race.done
-    ? `This race (seed ${race.seed}, ${nz(race.n)} digits): CNN ${pct(race.pts.cnn.at(-1)[1])}, ViT ${pct(race.pts.vit.at(-1)[1])}, now hollow dots on the chart above: one more run among the measured ones. Race again for a new seed.`
-    : `Both models train on the same ${nz(race.n)} digits in the same order, each at its own learning rate (CNN ${RACE.lr.cnn}, ViT ${RACE.lr.vit}); held-out accuracy every 2,000 steps. One run is one dot: at 100 digits the CNN won in every measured seed, at 1,000 and above either can win.`;
+    ? `This race (seed ${race.seed}, ${nz(race.n)} digits): CNN ${pct(race.pts.cnn.at(-1)[1])}, ViT ${pct(race.pts.vit.at(-1)[1])}${measured ? ', now hollow dots on the chart above: one more run among the measured ones' : '; the measured comparison could not be loaded'}. Race again for a new seed.`
+    : `Both models train on the same ${nz(race.n)} digits in the same order, each at its own learning rate (CNN ${RACE.lr.cnn}, ViT ${RACE.lr.vit}); held-out accuracy every 2,000 steps. One run is one dot.${own}`;
 }
 $('racePlay').onclick = () => setRacing(!racing);
 $('raceReset').onclick = () => { setRacing(false); raceSeed++; newRace(); $('racePlay').textContent = 'Race'; };
@@ -517,10 +525,11 @@ async function start() {
     fetch('../data/mnist16.bin').then((r) => (r.ok ? r.arrayBuffer() : null)).catch(() => null),
     fetch('../models/vit_vs_cnn.json').then((r) => (r.ok ? r.json() : null)).catch(() => null),
   ]);
-  if (!bin) { $('status').textContent = 'Could not load the digits (data/mnist16.bin); this page needs to be served over http.'; return; }
+  if (!bin) { $('status').textContent = 'Could not load the digits (data/mnist16.bin); this page needs to be served over http.'; document.querySelectorAll('main button, main select, main input[type=range]').forEach((e) => { e.disabled = true; }); return; }
   data = parseMnist16(bin); testIdx = [...Array(data.test.n).keys()];
   fixedImg = image(data.test, testIdx.find((i) => data.test.labels[i] === 7));
-  measured = js && js.version === 1 ? js : null;
+  const okRows = (r) => Array.isArray(r) && Array.isArray(js.sizes) && r.length === js.sizes.length && r.every((x) => Array.isArray(x) && x.length && x.every(Number.isFinite));
+  measured = js && js.version === 1 && Array.isArray(js.sizes) && js.sizes.length && Array.isArray(js.seeds) && okRows(js.cnn) && okRows(js.vit) ? js : null;
   $('status').textContent = `${nz(data.train.n)} training and ${nz(data.test.n)} held-out digits loaded.`;
   build(); reset(); layout(); document.fonts.ready.then(layout);
   drawChart(); $('chartNote').textContent = chartNote(); newRace();
