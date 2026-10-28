@@ -42,7 +42,7 @@ section{background:var(--panel);border:1px solid var(--line);border-radius:10px;
 .head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:12px}
 .head .n{font-family:var(--mono);color:var(--ink2);font-size:13px}
 .head p{color:var(--ink2);margin:0;flex:0 0 100%;font-size:14px;max-width:none;padding-right:max(0px,calc(100% - 92ch))}
-canvas{display:block;touch-action:none;border-radius:3px}
+canvas{display:block;touch-action:pan-x pan-y;border-radius:3px}
 .ctrls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
 button,select{font:inherit;font-size:13.5px;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:5px 10px;cursor:pointer}
 button:hover,select:hover{border-color:var(--accent)}
@@ -124,7 +124,7 @@ svg.arcs{position:absolute;left:0;top:0;pointer-events:none;overflow:visible}
 
 <section id="s3">
   <div class="head"><h2>3 · One attention head, written out</h2><span class="n">A = softmax(Q·Kᵀ / 2), output = A·V</span>
-    <p>Each token makes a query, a key and a value from its LayerNorm output: three learned 8×8 matrices, of which each head uses 4 columns. Token i's score for token j is query i · key j / 2; a softmax along the row turns the scores into weights that sum to 1; token i's output is the weighted sum of the values. Keys and values stand as columns above the map, one per token, so each row of the map weights the columns directly above it.</p></div>
+    <p>Each token makes a query, a key and a value from its LayerNorm output: three learned 8×8 matrices, of which each head uses 4 columns. Token i's score for token j is query i · key j / 2; a softmax along the row turns the scores into attention weights that sum to 1; token i's output is the weighted sum of the values. Keys and values stand as columns above the map, one per token, so each row of the map weights the columns directly above it.</p></div>
   <div class="ctrls"><span class="toggle"><button id="hd0" class="sel">head 1</button><button id="hd1">head 2</button></span>
     <label class="ctl">query token <input type="range" id="qi" min="0" max="15" value="0"><b id="qil">0</b></label></div>
   <div class="wrap"><div id="l3"></div></div>
@@ -172,7 +172,7 @@ const wRandom = init(1);
 let wTrained = null, meta = null, useTrained = true;
 let data = null, byClass = [], pick = { cls: 7, n: 0 }, img = null;
 let position = true, order = null, shuffles = 0;
-let probe = null, head = 0, kSel = 0, sweep = 0, walk = { i: 0, step: 0 };
+let probe = null, head = 0, kSel = 0, sweep = 5, walk = { i: 0, step: 0 };
 let S = null;
 const W = () => (useTrained && wTrained ? wTrained : wRandom);
 
@@ -188,8 +188,10 @@ function view(key, cell, o = {}) {
   const cv = document.createElement('canvas'); v.cv = cv;
   cv.width = o.px ? o.px[0] : v.cols * cell; cv.height = o.px ? o.px[1] : v.rows * cell;
   cv.style.width = cv.width + 'px'; cv.style.height = cv.height + 'px';
-  cv.addEventListener('pointermove', (ev) => { const p = v.bars ? barAt(v, ev) : cellAt(cv, ev); setProbe(p ? { t: kOf(v), ...rc(v.map(p[0], p[1])) } : null); });
-  cv.addEventListener('pointerleave', () => setProbe(null));
+  const probeAt = (ev) => { const p = v.bars ? barAt(v, ev) : cellAt(cv, ev); setProbe(p ? { t: kOf(v), ...rc(v.map(p[0], p[1])) } : null); };
+  cv.addEventListener('pointermove', probeAt);
+  cv.addEventListener('pointerdown', probeAt);
+  cv.addEventListener('pointerleave', (ev) => { if (ev.pointerType !== 'touch') setProbe(null); });
   views.push(v); return cv;
 }
 const rc = ([r, c]) => ({ r, c });
@@ -385,7 +387,7 @@ function describe(p) {
   return `${at} [${p.r}, ${p.c}] = ${fmt(val)}, learned. Green: what it reads and what it makes.`;
 }
 function patchMath() {
-  const w = W(), px = S.patches[sweep], k = w.Wp[kSel], t = px.map((x, q) => `${fmt(x)}×${fmt(k[q])}`);
+  const w = W(), px = S.patches[sweep], k = w.Wp[kSel], t = px.map((x, q) => `${fmt(x)} × ${fmt(k[q])}`);
   return `token ${sweep}, column ${kSel} = Σ pixel × kernel ${kSel + 1} + bias   (patch ${sweep}: rows ${(sweep >> 2) * 4}–${(sweep >> 2) * 4 + 3}, cols ${(sweep & 3) * 4}–${(sweep & 3) * 4 + 3})\n`
     + `  = ${t.slice(0, 8).join(' + ')}\n  + ${t.slice(8).join(' + ')}\n  + ${fmt(w.bp[kSel])}\n  = <span class="sum">${fmt(S.xp[sweep][kSel])}</span>`;
 }
@@ -401,32 +403,38 @@ function attentionMath() {
   const h = head, off = h * DH, i = walk.i, s = walk.step, q = S.q[i].slice(off, off + DH);
   if (s < T) {
     const k = S.k[s].slice(off, off + DH);
-    return `head ${h + 1}, score(${i}, ${s}) = query ${i} · key ${s} / 2\n  = (${q.map((x, c) => `${fmt(x)}×${fmt(k[c])}`).join(' + ')}) / 2\n  = <span class="sum">${fmt(S.scores[h][i][s])}</span>`;
+    return `head ${h + 1}, score(${i}, ${s}) = query ${i} · key ${s} / 2\n  = (${q.map((x, c) => `${fmt(x)} × ${fmt(k[c])}`).join(' + ')}) / 2\n  = <span class="sum">${fmt(S.scores[h][i][s])}</span>`;
   }
   if (s === T) return `head ${h + 1}, row ${i}: weights = softmax(scores) = exp(score) / Σ exp(score)\n  scores  ${S.scores[h][i].map(fmt).join('  ')}\n  weights ${S.att[h][i].map(fmt).join('  ')}   (sum 1)`;
   const A = S.att[h][i];
   return `head ${h + 1}, output of token ${i} = Σ_j weight(${i}, j) × value j, for each of its 4 numbers:\n` + [0, 1, 2, 3].map((c) => {
     const terms = A.map((a, j) => [a * S.v[j][off + c], a, j]).sort((x, y) => Math.abs(y[0]) - Math.abs(x[0]));
-    return `  out[${c}] = ${terms.slice(0, 3).map(([, a, j]) => `${fmt(a)}×${fmt(S.v[j][off + c])}`).join(' + ')} + (13 smaller) = <span class="sum">${fmt(S.heads[h][i][c])}</span>`;
+    return `  out[${c}] = ${terms.slice(0, 3).map(([, a, j]) => `${fmt(a)} × ${fmt(S.v[j][off + c])}`).join(' + ')} + (13 smaller) = <span class="sum">${fmt(S.heads[h][i][c])}</span>`;
   }).join('\n');
 }
 function headMath() {
   const w = W();
   if (!probe || probe.t !== 'prob') return 'scores = normalised average · W head + bias, then softmax. Hover a class for its numbers.';
   const c = probe.c;
-  return `score(${c}) = ${S.avgNorm.map((x, d) => `${fmt(x)}×${fmt(w.Wh[d][c])}`).join(' + ')} + ${fmt(w.bh[c])}\n  = <span class="sum">${fmt(S.logits[c])}</span>\nsoftmax: exp(score(${c})) / Σ exp(score) = <span class="sum">${pct(S.prob[c])}</span>`;
+  return `score(${c}) = ${S.avgNorm.map((x, d) => `${fmt(x)} × ${fmt(w.Wh[d][c])}`).join(' + ')} + ${fmt(w.bh[c])}\n  = <span class="sum">${fmt(S.logits[c])}</span>\nsoftmax: exp(score(${c})) / Σ exp(score) = <span class="sum">${pct(S.prob[c])}</span>`;
 }
 function wording() {
   const top = S.prob.indexOf(Math.max(...S.prob)), trained = useTrained && wTrained;
   const opt = meta && (meta.optimiser === 'adam' ? 'Adam' : 'SGD');
-  $('wsrc').innerHTML = `prediction <b>${top}</b> (${pct(S.prob[top])}), ` + (trained ? `trained weights: ${pct(meta.testAcc)} right on held-out digits` : 'random weights: arbitrary');
+  // The accuracy was measured with position on and the patches in reading order; say so when the page is set otherwise.
+  const noPos = meta && Number.isFinite(meta.testAccNoPos) ? pct(meta.testAccNoPos) : null;
+  let short = `trained weights: ${trained ? pct(meta.testAcc) : ''} right on held-out digits`, full = '';
+  if (trained && !position) { short = `trained weights, trained with position${noPos ? `: ${noPos} right on held-out digits without it` : ''}`; full = ` The weights were trained with position, so with position off${noPos ? ` they get only ${noPos} right` : ' that figure does not apply'}.`; }
+  if (trained && order) { short += ' (accuracy measured on patches in reading order, not shuffled)'; full += ' The accuracy was measured on patches in reading order, not on shuffled ones.'; }
+  const n = (set) => set.n.toLocaleString('en-NZ');
+  $('wsrc').innerHTML = `prediction <b>${top}</b> (${pct(S.prob[top])}), ` + (trained ? short : 'random weights: arbitrary');
   $('wnote').textContent = trained
-    ? `These weights were trained offline by tools/train_vit.mjs on the 3,000 training digits (${meta.passes} passes, ${opt}); they get ${pct(meta.testAcc)} of the 1,000 held-out digits right, ${meta.testAcc >= 0.8 ? 'about what' : 'less than'} the CNN pages' toy reaches on the same digits (80 to 85%). On real photographs a ViT needs far more training data than a CNN to catch up: it has to learn from examples the locality a convolution has built in.`
-    : 'These are random starting weights, before any training. Attention is learned: before training its maps are noise and the prediction is arbitrary.';
+    ? `These weights were trained offline by tools/train_vit.mjs on the ${n(data.train)} training digits (${meta.passes} passes, ${opt}); with position on and the patches in reading order they get ${pct(meta.testAcc)} of the ${n(data.test)} held-out digits right, ${meta.testAcc >= 0.8 ? 'about what' : 'less than'} the CNN pages' toy reaches on the same digits (80 to 85%).${full} On real photographs a ViT needs far more training data than a CNN to catch up: it has to learn from examples the locality a convolution has built in.`
+    :'These are random starting weights, before any training. Attention is learned: before training its maps are noise and the prediction is arbitrary.';
 }
 
 // ---------- controls ----------
-function setDigit() { const list = byClass[pick.cls], i = list[pick.n % list.length]; img = image(data.test, i); $('dlab').textContent = `test digit ${i}, a ${pick.cls}`; }
+function setDigit() { if (!data) return; const list = byClass[pick.cls], i = list[pick.n % list.length]; img = image(data.test, i); $('dlab').textContent = `test digit ${i}, a ${pick.cls}`; }
 function syncControls() {
   [...$('digits').children].forEach((b, c) => b.classList.toggle('sel', c === pick.cls));
   $('wTr').classList.toggle('sel', useTrained && !!wTrained); $('wRa').classList.toggle('sel', !(useTrained && wTrained)); $('wTr').disabled = !wTrained;
@@ -477,6 +485,7 @@ async function start() {
   if (js && js.version === 1 && isWeights(js.weights)) { wTrained = js.weights; meta = js.meta; }
   else { useTrained = false; banner('Could not load the trained weights (models/vit16.json), so this page shows random starting weights.'); }
   setDigit(); syncControls(); render(); layout();
+  document.fonts.ready.then(layout);
 }
 const ready = start();
 </script>
