@@ -29,13 +29,14 @@ Hover on any map cell anywhere traces its receptive field in green across every 
 2. **Known rough edges.** _Done 2026-10-12: higher, nearly head-on default camera for the depth layout; Terms tooltips and a Terms section on the 3D page through the shared `ui/terms.js`; a max/average pooling toggle in 3D; the 2D padding dropdown now shows its real default (1)._ In 3D depth layout the 16×16 input partly occludes deeper stages from the default angle (higher default camera, or a view from the output end looking back). The 3D page lacks the Terms tooltips. `poolMode` in 3D is max only.
 3. **Ideas discussed, not built.** _Trained weights and shared state arrived 2026-10-12 in a different form: the training page `cnn-train/` trains the toy live in the browser on 16×16 MNIST (no PyTorch), and hands its weights to the 2D and 3D pages through local storage; 28×28 and the travelling layer-2 kernel block remain ideas._ Render the layer-2 kernel's weights as a small coloured 3×3×4 block travelling with the sweep window. Bump input to 28×28 so receptive-field growth reads better. Trained LeNet-style weights: train offline (PyTorch, MNIST), export to JSON under `models/`, load in-browser so maps and predictions become real; the forward pass in `core/cnn.js` is already the right shape. Shared input state between the 2D and 3D pages (URL hash or localStorage).
 4. **Next architectures**, reusing the same interaction grammar (yellow forward window, green backward footprint, hover-linked highlights, inline terms):
-   - ViT: patch embedding as a strided conv, tokens, one attention head shown as Q·Kᵀ → softmax → weighted sum, the attention map as "a receptive field that is global in one step".
+   - ViT: _built 2026-10-28 as `vit/`, the explorer, with the tokens averaged instead of a class token (see `docs/superpowers/specs/2026-10-28-vit-explorer-design.md`); its training page `vit-train/` is next._ Patch embedding as a strided conv, tokens, one attention head shown as Q·Kᵀ → softmax → weighted sum, the attention map as "a receptive field that is global in one step".
    - ConvNeXt: 7×7 depthwise conv (one slice per channel, no cross-channel sum — contrast with the 3×3×C kernel here), pointwise 1×1 as the mixing step, inverted bottleneck, LayerNorm/GELU.
    - CoAtNet: the diagram that started this project — MBConv stages then relative-attention stages; show where the switch from local to global happens and what it costs.
 
 ## Run locally
     python3 -m http.server 8000     # http://localhost:8000/
     node core/cnn.test.mjs
+    node core/vit.test.mjs
 
 ## Publish
 Push to `main` on GitHub with Pages set to "GitHub Actions" as the source; `.github/workflows/pages.yml` deploys the repo root.
