@@ -1,7 +1,7 @@
 // tools/train_vit.mjs — train the toy ViT of core/vit.js on data/mnist16.bin; with --out, write the weights the
 // ViT page loads. Prints held-out accuracy after every pass over the 3,000 training digits.
 //   node tools/train_vit.mjs --opt sgd --lr 0.1 --passes 10
-//   node tools/train_vit.mjs --opt adam --lr 0.003 --passes 10 --out models/vit16.json
+//   node tools/train_vit.mjs --opt sgd --lr 0.003 --passes 10 --out models/vit16.json
 // Options: --opt sgd|adam, --lr, --passes, --batch (default 1), --seed (default 1), --out (a path from the repo root).
 import { readFileSync, writeFileSync } from 'node:fs';
 import { parseMnist16, image } from '../core/data.js';
@@ -9,7 +9,7 @@ import { shuffledOrder } from '../core/train.js';
 import { init, paramCount, lossAndGrad, sgdStep, adamInit, adamStep, averageGrads, accuracy } from '../core/vit.js';
 
 const argv = process.argv.slice(2), arg = (name, dflt) => { const i = argv.indexOf('--' + name); return i < 0 ? dflt : argv[i + 1]; };
-const opt = arg('opt', 'sgd'), lr = +arg('lr', opt === 'adam' ? 0.003 : 0.1), passes = +arg('passes', 10);
+const opt = arg('opt', 'sgd'), lr = +arg('lr', 0.003), passes = +arg('passes', 10);
 const batch = +arg('batch', 1), seed = +arg('seed', 1), out = arg('out', null);
 if (!['sgd', 'adam'].includes(opt)) throw new Error('--opt is sgd or adam');
 
@@ -36,7 +36,8 @@ if (out) {
   const meta = {
     seed, optimiser: opt, lr, batch, passes, digits: passes * data.train.n,
     trainAcc: +accuracy(weights, data.train, every(data.train)).toFixed(4), testAcc: +accuracy(weights, data.test, every(data.test)).toFixed(4),
-    made: `node tools/train_vit.mjs ${argv.join(' ')}`, date: new Date().toISOString().slice(0, 10),
+    testAccNoPos: +accuracy(weights, data.test, every(data.test), { position: false }).toFixed(4),
+    made: `node tools/train_vit.mjs ${argv.join(' ')}`, date: new Date().toLocaleDateString('en-CA'),
   };
   writeFileSync(new URL('../' + out, import.meta.url), JSON.stringify({ version: 1, arch: 'vit16', meta, weights }) + '\n');
   console.log(`wrote ${out}: held-out ${pct(meta.testAcc)}, training ${pct(meta.trainAcc)} (rounded weights)`);
