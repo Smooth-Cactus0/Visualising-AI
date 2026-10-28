@@ -87,6 +87,7 @@ section.arch{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.12fr);g
 .arch li b{color:var(--ink);font-weight:500}
 .arch .builds{font-size:13.5px;color:var(--ink2);margin-top:12px}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;grid-column:1/-1}
+.cards.one{grid-template-columns:minmax(0,360px)}
 .card{display:flex;flex-direction:column;gap:4px;border:1px solid var(--line);border-radius:10px;padding:12px 14px;text-decoration:none;color:var(--ink);background:var(--bg)}
 .card:hover{border-color:var(--accent)}
 .card b{display:flex;align-items:center;gap:9px;font-weight:600;font-size:15px}
@@ -134,12 +135,12 @@ footer p{margin:0 0 6px;max-width:90ch}
 <header>
   <h1>Visualising AI</h1>
   <p class="lede">Interactive explorers for deep-learning architectures. Each one takes the boxes of an architecture diagram and shows what they <b>compute</b>: every cell, kernel, weight and gradient can be hovered, and the arithmetic is written out. The networks are small on purpose, so that every number fits on screen.</p>
-  <p class="lede">The convolutional network is built. The Vision Transformer is next, then U-Net, CoAtNet and ConvNeXt.</p>
+  <p class="lede">The convolutional network is built, and the Vision Transformer has its explorer. Next: the Vision Transformer's training page, then U-Net, CoAtNet and ConvNeXt.</p>
 </header>
 
 <nav class="archs" aria-label="Architectures">
   <a href="#cnn">CNN <span class="badge live">3 pages</span></a>
-  <a href="#vit">Vision Transformer <span class="badge next">next</span></a>
+  <a href="#vit">Vision Transformer <span class="badge live">1 page</span></a>
   <a href="#unet">U-Net <span class="badge planned">planned</span></a>
   <a href="#coatnet">CoAtNet <span class="badge planned">planned</span></a>
   <a href="#convnext">ConvNeXt <span class="badge planned">planned</span></a>
@@ -149,7 +150,7 @@ footer p{margin:0 0 6px;max-width:90ch}
   <h2>How to read every page</h2>
   <div class="keys">
     <div><i class="y"></i><span><b style="color:var(--ink);font-weight:500">Yellow</b> is the kernel window as it moves forward over its input.</span></div>
-    <div><i class="g"></i><span><b style="color:var(--ink);font-weight:500">Green</b> traces backwards: what a hovered cell sees, or the two sources of a weight's gradient.</span></div>
+    <div><i class="g"></i><span><b style="color:var(--ink);font-weight:500">Green</b> traces backwards: what a hovered cell sees, or the two sources of a weight's gradient. On the ViT page, after attention, its strength is the attention weight.</span></div>
     <div><i class="d"></i><span><b style="color:var(--ink);font-weight:500">Blue to orange</b> is negative to positive. In 3D, cube size is magnitude.</span></div>
     <div><i class="t">term</i><span>A dotted word has its definition on hover; every page ends with its Terms.</span></div>
   </div>
@@ -174,21 +175,18 @@ footer p{margin:0 0 6px;max-width:90ch}
 </section>
 
 <section class="arch" id="vit">
-  <div class="fig"><svg data-arch="vit" viewBox="0 0 440 150" role="img" aria-label="An image cut into 16 patches becomes a row of tokens plus a class token; in the encoder every token attends to every other; the class token gives 10 class probabilities."></svg>
-    <div class="cap">Patches → tokens → attention, every token to every other → class token → 10 classes. One token's attention in green.</div></div>
+  <div class="fig"><svg data-arch="vit" viewBox="0 0 440 150" role="img" aria-label="An image cut into 16 patches becomes a row of tokens; in the encoder every token attends to every other; the tokens are averaged and give 10 class probabilities."></svg>
+    <div class="cap">Patches → tokens → attention, every token to every other → average → 10 classes. One token's attention in green.</div></div>
   <div>
-    <div class="head"><span class="num">02</span><h2>Vision Transformer (ViT)</h2><span class="badge next">next</span></div>
+    <div class="head"><span class="num">02</span><h2>Vision Transformer (ViT)</h2><span class="badge live">1 page</span></div>
     <p class="def">Cut the image into patches, turn each patch into a vector called a token, and let every token look at every other one through attention.</p>
     <p class="why">Where a convolution's view grows a few pixels per layer, attention sees the whole image from the first layer and learns where to look. The price: its cost grows with the square of the number of patches, which is why patches are large.</p>
-    <div class="sub">What the page will show</div>
-    <ul>
-      <li><b>Patch embedding</b> as a convolution whose stride equals its size: the CNN pages' kernel, jumping instead of sliding.</li>
-      <li><b>Position</b> added to each token, since attention by itself does not know where a patch came from.</li>
-      <li><b>One attention head</b> written out: queries against keys, softmax, a weighted sum of values.</li>
-      <li><b>The attention map</b> as a receptive field that is global in one step.</li>
-    </ul>
     <p class="builds">Builds on the CNN pages: stride, kernels, softmax.</p>
   </div>
+    <div class="cards one">
+      <a class="card" href="vit/"><b><svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><g class="k-act"><rect class="f" x="2" y="2" width="22" height="22" rx="2"/></g><rect x="13" y="7.5" width="5.5" height="5.5" fill="var(--hl2)"/><rect x="7.5" y="2" width="5.5" height="5.5" fill="var(--hl2)" opacity=".55"/><rect x="2" y="18.5" width="5.5" height="5.5" fill="var(--hl2)" opacity=".3"/><path class="grid" d="M7.5 2v22M13 2v22M18.5 2v22M2 7.5h22M2 13h22M2 18.5h22"/></svg>Explorer</b>
+        <span>Patches become tokens, position is added, one attention head is written out score by score, then the MLP, the residuals and the average. Trained weights; hover any value to see what it reads.</span><em>Open →</em></a>
+    </div>
 </section>
 
 <section class="arch" id="unet">
@@ -278,7 +276,7 @@ footer p{margin:0 0 6px;max-width:90ch}
     vit() {
       let s = box(10, 42, 64, 64, 3, 'in') + `<path class="grid" d="M26 42v64M42 42v64M58 42v64M10 58h64M10 74h64M10 90h64"/>` + `<path class="glyph" d="M29 58H55L38 92"/>` + label(43, 140, 'image');
       s += arrow(80, 74, 94, 74);
-      for (let i = 0; i < 9; i++) s += `<rect class="${i === 0 ? 'bar' : ''}" x="${98 + i * 10}" y="56" width="6.5" height="36" rx="1.5" ${i ? 'fill="var(--tok-f)" stroke="var(--edge)" stroke-width=".8"' : ''}/>`;
+      for (let i = 0; i < 9; i++) s += `<rect x="${98 + i * 10}" y="56" width="6.5" height="36" rx="1.5" fill="var(--tok-f)" stroke="var(--edge)" stroke-width=".8"/>`;
       s += label(98 + 4 * 10 + 3, 140, 'tokens');
       s += arrow(190, 74, 204, 74);
       s += `<rect class="encbox" x="208" y="26" width="128" height="96" rx="9"/>`;
@@ -286,7 +284,7 @@ footer p{margin:0 0 6px;max-width:90ch}
       for (let i = 0; i < 9; i++) for (let j = 0; j < 9; j++) s += `<line class="att${j === 4 ? ' q' : ''}" x1="${top(i)}" y1="${yT}" x2="${top(j)}" y2="${yB}"/>`;
       for (let i = 0; i < 9; i++) s += `<circle class="dot" cx="${top(i)}" cy="${yT}" r="2.6"/><circle class="dot${i === 4 ? ' q' : ''}" cx="${top(i)}" cy="${yB}" r="${i === 4 ? 3.4 : 2.6}"/>`;
       s += label(272, 140, 'encoder × L');
-      s += arrow(340, 74, 356, 74) + `<rect class="bar" x="360" y="56" width="6.5" height="36" rx="1.5"/>` + label(363, 140, 'class') + arrow(371, 74, 386, 74) + bars(392, 74) + label(403, 140, '10');
+      s += arrow(340, 74, 356, 74) + `<rect x="360" y="56" width="6.5" height="36" rx="1.5" fill="var(--tok-f)" stroke="var(--edge)" stroke-width=".8"/>` + label(363, 140, 'average') + arrow(371, 74, 386, 74) + bars(392, 74) + label(403, 140, '10');
       return s;
     },
     unet() {
