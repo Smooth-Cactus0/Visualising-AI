@@ -97,7 +97,7 @@ main a{color:var(--accent)}
 
 <section id="s1">
   <div class="head"><h2>One step</h2><span class="n">digit → forward → backward, a stage at a time → update</span>
-    <p>The ViT is laid out as on the explorer, token i on row i, with three rows: forward (activations, and the weights where they act), backward (the gradient of each, under it) and update (w′ = w − learning rate × gradient, under each weight). Step runs one phase. Backward starts at the class scores as p − y and flows right to left, a stage per step: the classifier head, the MLP, attention, the patch embedding; each step frames in green what it computed. Through attention the error flows the other way round from the forward pass: a token's output read a row of the attention map, so the gradient of a token's key and value collects from a column, every query that read it, in proportion. A weight's gradient sums, over the 16 tokens, what came forward into it times what came back out of it. Next digit finishes this digit and brings the next. While Many steps plays, this band follows the training.</p></div>
+    <p>The ViT is laid out as on the explorer, token i on row i, with three rows: forward (activations, and the weights where they act), backward (the gradient of each, under it) and update (w′ = w − learning rate × gradient, under each weight). Step runs one phase. Backward starts at the class scores as p − y and flows right to left, a stage per step: the classifier head, the MLP, attention, the patch embedding; each step frames in green what it computed. Through attention the error flows the other way round from the forward pass: a token's output read a row of the attention map, so the gradient of a token's key and value collects from a column, every query that read it, in proportion. A weight's gradient is what came forward into it times what came back out of it, summed over the 16 tokens when the 16 tokens share the weight. Next digit finishes this digit and brings the next. While Many steps plays, this band follows the training.</p></div>
   <div class="ctrls">
     <span class="phase" id="phase"><b data-p="0">digit</b>→<b data-p="1">forward</b>→<b data-p="2">back: head</b>→<b data-p="3">back: MLP</b>→<b data-p="4">back: attention</b>→<b data-p="5">back: embedding</b>→<b data-p="6">update</b></span>
     <button id="stepBtn" class="primary">Step</button><button id="nextBtn">Next digit</button>
@@ -109,7 +109,7 @@ main a{color:var(--accent)}
 
 <section id="s2">
   <div class="head"><h2>Many steps</h2><span class="n">play · curves · attention and position over training</span>
-    <p>Play repeats the step for digit after digit, with SGD. The loss curve shows the loss per digit and its running average; accuracy is measured on the last 200 training digits and, every 500 digits, on the 1,000 held-out digits the network never trains on. This transformer is sensitive to the learning rate: from about 0.1 up it stops learning (measured: 0.1 reached 30% after ten passes, 0.3 nothing), where the CNN page trains well at 0.1. Below, at six moments of training: both heads' attention maps for one fixed digit, and the position table as similarities.</p></div>
+    <p>Play repeats the step for digit after digit, with SGD. The loss curve shows the loss per digit and its running average; accuracy is measured on the last 200 training digits and, every 500 digits, on the 1,000 held-out digits the network never trains on. This transformer is sensitive to the learning rate: at 0.1 and above it learns badly or not at all (measured on the 3,000 digits, ten passes: 0.1 reached 29.7%, 0.3 diverged at 15.6%), where the CNN page trains well at 0.1. Below, at six moments of training: both heads' attention maps for one fixed digit, and the position table as similarities.</p></div>
   <div class="ctrls">
     <button id="playBtn" class="primary">Play</button><button id="resetBtn" title="new random weights; curves, snapshots and digits cleared">Restart</button>
     <label class="ctl">speed <select id="speed"><option value="2">2 / s</option><option value="10">10 / s</option><option value="50">50 / s</option><option value="200" selected>200 / s</option><option value="500">500 / s</option></select></label>
@@ -123,7 +123,7 @@ main a{color:var(--accent)}
   </div>
   <div class="cap" style="margin-top:14px">Over training, for the first held-out 7: head 1's attention map · head 2's · the position table as similarities</div>
   <div class="snaps" id="snaps"></div>
-  <div class="note">Each attention map is 16 × 16: row i is where token i looks. The similarity picture puts, at each patch slot, a 4 × 4 map of how alike that slot's row of the position table is to every other slot's (orange alike, blue opposite). In the ViT paper, trained on millions of images, these maps form a 2D grid: neighbours alike. Here, on 3,000 digits, no grid forms (measured: neighbouring slots are no more alike than distant ones), yet the model leans on position: switched off, the held-out accuracy of the explorer's shipped weights (one run) falls from 82% to 34%. It uses each row as a label for its slot, not as a map.</div>
+  <div class="note">Each attention map is 16 × 16: row i is where token i looks. The similarity picture puts, at each patch slot, a 4 × 4 map of how alike that slot's row of the position table is to every other slot's (orange alike, blue opposite). In the ViT paper, trained on millions of images, these maps form a 2D grid: neighbours alike. Here, on 3,000 digits, no grid forms (measured on the explorer's shipped weights and on Adam-trained weights: neighbouring slots are no more alike than distant ones), yet the model leans on position: switched off, the held-out accuracy of the explorer's shipped weights (one run) falls from 82% to 34%. It uses each row as a label for its slot, not as a map.</div>
   <div class="cap" style="margin-top:14px">Recent digits, with the guess made at the time</div>
   <div class="thumbs" id="thumbs"></div>
   <div class="ctrls" id="handoff"><button id="useBtn">Use these weights in the ViT explorer</button><button id="dlBtn">Download JSON</button><span class="cap" id="useMsg"></span></div>
@@ -131,7 +131,7 @@ main a{color:var(--accent)}
 
 <section id="s3">
   <div class="head"><h2>CNN against ViT</h2><span class="n">held-out accuracy after 30,000 steps, by number of training digits</span>
-    <p>Both toys trained on the same few digits, 30,000 SGD steps each, at their own best learning rate. A convolution only combines neighbouring pixels, so a CNN starts out knowing that nearby pixels belong together; attention can join any two patches, so a ViT has to learn locality from the examples. With few examples that costs it a lot. Each dot is one run with its own seed; the lines join the averages.</p></div>
+    <p>Both toys trained on the same few digits, 30,000 SGD steps each, each at its own learning rate (CNN 0.1, the CNN training page's default; ViT 0.003, the explorer's). A convolution only combines neighbouring pixels, so a CNN starts out knowing that nearby pixels belong together; attention can join any two patches, so a ViT has to learn locality from the examples. With few examples that costs it a lot. Each dot is one run with its own seed; the lines join the averages.</p></div>
   <div class="legend" id="legend"><span><i style="background:var(--cnn)"></i>CNN</span><span><i style="background:var(--vit)"></i>ViT</span><span><i class="hollow"></i>this page's race</span></div>
   <div class="chartbox"><canvas id="cChart" width="640" height="300"></canvas></div>
   <div class="note" id="chartNote"></div>
@@ -175,7 +175,7 @@ let data = null, testIdx = [], fixedImg = null;
 let seed = 1, lr = 0.003, batch = 1, speed = 200;
 let weights = null, order = [], orderPos = 0, passes = 0, digitsSeen = 0;
 let cur = null;        // { i, input, label, phase (see P), S, loss, grads, back, pred, applied }
-let collected = [], shown = null, prevWeights = null;
+let collected = [], shown = null, shownCount = 0, prevWeights = null;
 let probe = null;
 let lossRaw = [], lossEma = [], ema = null, trainFlags = [], accTrain = [], accTest = [], lastTest = null, snaps = [], recent = [];
 let playing = false, carry = 0, lastFrame = 0, lastDraw = 0, drawn = null;
@@ -193,9 +193,9 @@ function doForward() {
   const r = lossAndGrad(weights, cur.input, cur.label);
   Object.assign(cur, { S: r.S, loss: r.loss, grads: r.grads, back: r.back, pred: argmax(r.S.prob), phase: P.FWD });
 }
-function doBackward() { collected.push(cur.grads); shown = collected.length === 1 ? cur.grads : averageGrads(collected); cur.phase = P.B0; }
+function doBackward() { collected.push(cur.grads); shown = collected.length === 1 ? cur.grads : averageGrads(collected); shownCount = collected.length; cur.phase = P.B0; }
 function doUpdate() {
-  if (collected.length >= batch) { prevWeights = weights; weights = sgdStep(weights, shown, lr); collected = []; cur.applied = true; }
+  if (collected.length >= batch) { prevWeights = weights; weights = sgdStep(weights, shown, lr); collected = []; cur.applied = true; cur.lrApplied = lr; }
   else cur.applied = false;
   cur.phase = P.UPD; digitsSeen++; record(cur);
 }
@@ -261,6 +261,7 @@ const { views, view, kOf } = createViews({ shapeOf: (key) => SHAPES[base(key)], 
 function setProbe(p) { if (JSON.stringify(p) !== JSON.stringify(probe)) { probe = p; renderNet(); } }
 const A = 8, Wc = 6; // cell sizes, px: activations, weights (the explorer overview's)
 const STAGE_OF = {}; BACK_STAGES.forEach((s, k) => [...s.act, ...s.w].forEach((key) => { STAGE_OF[key] = k; }));
+const shownStageNow = () => (cur && cur.phase >= P.B0 ? Math.min(cur.phase, P.UPD - 1) - P.B0 : -1); // the last backward stage revealed
 function build() {
   const R = [[], [], []]; // forward, backward, update
   const add = (f, b, u) => { R[0].push(f); R[1].push(b); R[2].push(u); };
@@ -295,11 +296,11 @@ const layout = () => arcs($('net'), [['z0', 'add1'], ['z1', 'add2']]);
 function renderNet() {
   if (!cur) return;
   const ph = cur.phase, S = cur.S, wB = wBefore(), wP = ph >= P.B0 ? wPrime() : null, scale = {};
-  const shownStage = ph >= P.B0 ? Math.min(ph, P.UPD - 1) - P.B0 : -1; // the last stage revealed
+  const shownStage = shownStageNow();
   const revealed = (key) => STAGE_OF[key] <= shownStage, front = (key) => !playing && ph < P.UPD && STAGE_OF[key] === shownStage;
   const img2d = S ? S.img : Array.from({ length: 16 }, (_, r) => Array.from(cur.input.slice(r * 16, r * 16 + 16)));
   const isGrad = probe && probe.t !== base(probe.t) && probe.t[0] === 'd', isW = probe && WEIGHT_KEYS.includes(base(probe.t));
-  const green = !probe || !S ? {} : isGrad || isW ? gradTrace(S, probe) : vitTrace(S, probe);
+  const green = !probe || !S || ((isGrad || isW) && !revealed(base(probe.t))) ? {} : isGrad || isW ? gradTrace(S, probe) : vitTrace(S, probe);
   for (const v of views) {
     const key = kOf(v), b = base(key), ns = key === b ? '' : key[0], weight = WEIGHT_KEYS.includes(b), [R, C] = SHAPES[b];
     let M = null, faint = false;
@@ -336,17 +337,32 @@ function describe(p) {
     if (cur.phase === P.DIGIT) return 'A new digit. Step runs the forward pass.';
     if (cur.phase === P.FWD) return `Forward done: the guess is ${cur.pred}, the label ${cur.label}, the loss −log p(${cur.label}) = ${fmt(cur.loss)}. Step starts the backward pass at the scores.`;
     if (cur.phase < P.UPD) return `Backward through the ${BACK_STAGES[cur.phase - P.B0].name}: the green frames mark what this step computed. Hover any value for how.`;
-    return cur.applied ? `Updated: every weight moved by −${lr} × its gradient. Step loads the next digit.` : `Gradient collected (${collected.length}/${batch}); the weights move once the batch is full.`;
+    return cur.applied ? `Updated: every weight moved by −${cur.lrApplied ?? lr} × its gradient. Step loads the next digit.` : `Gradient collected (${collected.length}/${batch}); the weights move once the batch is full.`;
   }
   const b = base(p.t), ns = p.t === b ? '' : p.t[0], name = NAME[b] || b, S = cur.S;
   if (WEIGHT_KEYS.includes(b)) {
-    const w0 = tensor(b, null, wBefore())[p.r][p.c], g = shown && cur.phase >= P.B0 ? tensor(b, null, shown)[p.r][p.c] : null, io = IN_OUT[b];
-    const how = io ? `Σ over the 16 tokens of ${io[0]}[t, ${p.r}] × ∂L/∂${io[1]}[t, ${p.c}]` : 'the sum of the gradients it was added to';
+    const w0 = tensor(b, null, wBefore())[p.r][p.c], io = IN_OUT[b], r = p.r, c = p.c;
+    const ok = !!shown && STAGE_OF[b] <= shownStageNow(), g = ok ? tensor(b, null, shown)[r][c] : null;
+    const L = cur.phase === P.UPD && cur.applied && cur.lrApplied != null ? cur.lrApplied : lr;
+    const T16 = 'Σ over the 16 tokens of ';
+    const OUT = { bq: 'query', bk: 'key', bv: 'value', bo: 'z₁', b1: 'hidden', b2: 'z₂' }, LNO = { ln1: 'LayerNorm 1 output', ln2: 'LayerNorm 2 output' };
+    let how;
+    if (b === 'Wh') how = `normalised average[${r}] × ∂L/∂score[${c}]`;
+    else if (b === 'bh') how = `∂L/∂score[${c}]`;
+    else if (b === 'Wp') how = `Σ over the 16 patches of pixel ${c} of the patch × ∂L/∂token[t, ${r}]`;
+    else if (b === 'bp') how = `${T16}∂L/∂token[t, ${c}]`;
+    else if (io) how = `${T16}${io[0]}[t, ${r}] × ∂L/∂${io[1]}[t, ${c}]`;
+    else if (OUT[b]) how = `${T16}∂L/∂${OUT[b]}[t, ${c}]`;
+    else if (LNO[b]) how = r === 0 ? `${T16}∂L/∂${LNO[b]}[t, ${c}] × x̂[t, ${c}], the normalised input` : `${T16}∂L/∂${LNO[b]}[t, ${c}]`;
+    else if (b === 'lnf') how = r === 0 ? `∂L/∂(normalised average)[${c}] × x̂[${c}]` : `∂L/∂(normalised average)[${c}]`;
+    else if (b === 'pos') how = `∂L/∂z₀[${r}, ${c}]: the position entry is added to token ${r} alone`;
+    else how = 'the sum of the gradients it was added to';
     const f4 = (x) => (x === 0 ? '0' : Math.abs(x) < 1e-4 ? x.toExponential(1) : x.toFixed(4)); // a step is often under 0.01
-    return `<b>${name} [${p.r}, ${p.c}]</b> w = ${f4(w0)}` + (g == null ? '' : `\n∂L/∂w = ${how} = <span class="sum">${fmt(g)}</span>\nw′ = w − ${lr} × ∂L/∂w = ${f4(w0)} − ${f4(lr * g)} = <span class="sum">${f4(w0 - lr * g)}</span>`);
+    const avg = shownCount > 1 ? ` (averaged over the batch's ${shownCount} digits so far)` : '';
+    return `<b>${name} [${r}, ${c}]</b> w = ${f4(w0)}` + (g == null ? '\n∂L/∂w is not computed yet: the backward pass has not reached this weight.' : `\n∂L/∂w = ${how} = <span class="sum">${fmt(g)}</span>${avg}\nw′ = w − ${L} × ∂L/∂w = ${f4(w0)} − ${f4(L * g)} = <span class="sum">${f4(w0 - L * g)}</span>`);
   }
   if (!S) return 'Step runs the forward pass first.';
-  if (ns === 'd') return `<b>∂L/∂${name}</b> [${p.r}, ${p.c}] = <span class="sum">${fmt(backTensor(b)[p.r][p.c])}</span>\n= ${HOW[b]}`;
+  if (ns === 'd') return STAGE_OF[b] <= shownStageNow() ? `<b>∂L/∂${name}</b> [${p.r}, ${p.c}] = <span class="sum">${fmt(backTensor(b)[p.r][p.c])}</span>\n= ${HOW[b]}` : `<b>∂L/∂${name}</b> [${p.r}, ${p.c}]: not computed yet, the backward pass has not reached it.`;
   const val = b === 'digit' ? S.img[p.r][p.c] : tensor(b, S, wBefore())[p.r][p.c];
   return `<b>${name}</b> [${p.r}, ${p.c}] = ${fmt(val)}` + (b === 'prob' ? ` (${pct(val)})` : '') + '. Green: what it is computed from, upstream.';
 }
@@ -521,17 +537,19 @@ addEventListener('resize', layout);
 // ---------- start ----------
 async function start() {
   installTerms({ selectors: '.lede, .head p, .note:not(#status):not(#chartNote):not(#raceNote)', tip: $('tip'), gloss: $('gloss'), terms: VIT_TRAIN_TERMS });
+  const setControls = (off) => document.querySelectorAll('main button, main select, main input[type=range]').forEach((e) => { e.disabled = off; });
+  setControls(true); // nothing to drive until the digits are in
   const [bin, js] = await Promise.all([
     fetch('../data/mnist16.bin').then((r) => (r.ok ? r.arrayBuffer() : null)).catch(() => null),
     fetch('../models/vit_vs_cnn.json').then((r) => (r.ok ? r.json() : null)).catch(() => null),
   ]);
-  if (!bin) { $('status').textContent = 'Could not load the digits (data/mnist16.bin); this page needs to be served over http.'; document.querySelectorAll('main button, main select, main input[type=range]').forEach((e) => { e.disabled = true; }); return; }
+  if (!bin) { $('status').textContent = 'Could not load the digits (data/mnist16.bin); this page needs to be served over http.'; return; }
   data = parseMnist16(bin); testIdx = [...Array(data.test.n).keys()];
   fixedImg = image(data.test, testIdx.find((i) => data.test.labels[i] === 7));
   const okRows = (r) => Array.isArray(r) && Array.isArray(js.sizes) && r.length === js.sizes.length && r.every((x) => Array.isArray(x) && x.length && x.every(Number.isFinite));
   measured = js && js.version === 1 && Array.isArray(js.sizes) && js.sizes.length && Array.isArray(js.seeds) && okRows(js.cnn) && okRows(js.vit) ? js : null;
   $('status').textContent = `${nz(data.train.n)} training and ${nz(data.test.n)} held-out digits loaded.`;
-  build(); reset(); layout(); document.fonts.ready.then(layout);
+  build(); reset(); setControls(false); layout(); document.fonts.ready.then(layout);
   drawChart(); $('chartNote').textContent = chartNote(); newRace();
 }
 const ready = start();
