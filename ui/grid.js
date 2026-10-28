@@ -1,4 +1,4 @@
-// ui/grid.js — canvas grid drawing and hit-testing shared by the 2D and training pages.
+// ui/grid.js — canvas grid drawing and hit-testing shared by the 2D, training and ViT pages.
 // Colours come from the page's CSS tokens (--line, --ink, --hl, --hl2) and follow its light/dark theme.
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -21,7 +21,9 @@ export const maxAbs = (m) => Math.max(0.01, ...Array.from(m, Math.abs));
 
 const layouts = new WeakMap(); // canvas -> {cell, ox, oy, w, h}
 
-/** Draw a w×h grid of values on a canvas, with optional labels and highlights; remembers the layout for cellAt. */
+/** Draw a w×h grid of values on a canvas, with optional labels and highlights; remembers the layout for cellAt.
+ *  Options used by the ViT page only: glow (a 0–1 green strength per cell), win ([r0, r1, c0, c1], a yellow
+ *  rectangle), blocks (dashed lines every n cells) and lines: false (no inner grid lines). */
 export function drawGrid(cv, data, w, h, o = {}) {
   const ctx = cv.getContext('2d'); const Wd = cv.width, Hd = cv.height;
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, Wd, Hd);
@@ -34,8 +36,17 @@ export function drawGrid(cv, data, w, h, o = {}) {
     ctx.fillRect(ox + c * cell, oy + r * cell, cell, cell);
   }
   ctx.strokeStyle = cssVar('--line'); ctx.lineWidth = 1;
-  for (let r = 0; r <= h; r++) { ctx.beginPath(); ctx.moveTo(ox, oy + r * cell + .5); ctx.lineTo(ox + w * cell, oy + r * cell + .5); ctx.stroke(); }
-  for (let c = 0; c <= w; c++) { ctx.beginPath(); ctx.moveTo(ox + c * cell + .5, oy); ctx.lineTo(ox + c * cell + .5, oy + h * cell); ctx.stroke(); }
+  if (o.lines === false) ctx.strokeRect(ox + .5, oy + .5, w * cell - 1, h * cell - 1); // small cells: the outline only
+  else {
+    for (let r = 0; r <= h; r++) { ctx.beginPath(); ctx.moveTo(ox, oy + r * cell + .5); ctx.lineTo(ox + w * cell, oy + r * cell + .5); ctx.stroke(); }
+    for (let c = 0; c <= w; c++) { ctx.beginPath(); ctx.moveTo(ox + c * cell + .5, oy); ctx.lineTo(ox + c * cell + .5, oy + h * cell); ctx.stroke(); }
+  }
+  if (o.blocks) { // dashed lines every `blocks` cells: the patch grid
+    ctx.strokeStyle = cssVar('--accent'); ctx.setLineDash([3, 2]); ctx.beginPath();
+    for (let k = o.blocks; k < w; k += o.blocks) { ctx.moveTo(ox + k * cell + .5, oy); ctx.lineTo(ox + k * cell + .5, oy + h * cell); }
+    for (let k = o.blocks; k < h; k += o.blocks) { ctx.moveTo(ox, oy + k * cell + .5); ctx.lineTo(ox + w * cell, oy + k * cell + .5); }
+    ctx.stroke(); ctx.setLineDash([]);
+  }
   if (o.padBorder) { const pad = o.pad || 0; ctx.strokeStyle = 'rgba(128,128,128,.9)'; ctx.setLineDash([3, 3]);
     ctx.strokeRect(ox + pad * cell + .5, oy + pad * cell + .5, (w - 2 * pad) * cell, (h - 2 * pad) * cell); ctx.setLineDash([]); }
   if (o.labels && cell >= 22) {
@@ -48,8 +59,26 @@ export function drawGrid(cv, data, w, h, o = {}) {
     }
   }
   const hl = cssVar('--hl'), hl2 = cssVar('--hl2');
+  if (o.glow) { // graded green: a 0–1 strength per cell, the full-strength cells outlined as one region
+    const g = o.glow, full = (r, c) => r >= 0 && c >= 0 && r < h && c < w && g[r * w + c] >= 0.999;
+    ctx.fillStyle = hl2;
+    for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) {
+      const s = g[r * w + c]; if (s > 0) { ctx.globalAlpha = 0.12 + 0.38 * Math.min(1, s); ctx.fillRect(ox + c * cell, oy + r * cell, cell, cell); }
+    }
+    ctx.globalAlpha = 1; ctx.strokeStyle = hl2; ctx.lineWidth = cell >= 8 ? 2 : 1.5; const e = ctx.lineWidth / 2; ctx.beginPath();
+    for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) if (full(r, c)) {
+      const x = ox + c * cell, y = oy + r * cell;
+      if (!full(r - 1, c)) { ctx.moveTo(x, y + e); ctx.lineTo(x + cell, y + e); }
+      if (!full(r + 1, c)) { ctx.moveTo(x, y + cell - e); ctx.lineTo(x + cell, y + cell - e); }
+      if (!full(r, c - 1)) { ctx.moveTo(x + e, y); ctx.lineTo(x + e, y + cell); }
+      if (!full(r, c + 1)) { ctx.moveTo(x + cell - e, y); ctx.lineTo(x + cell - e, y + cell); }
+    }
+    ctx.stroke();
+  }
   if (o.taps) { ctx.strokeStyle = hl; ctx.lineWidth = 3; o.taps.forEach(([r, c]) => ctx.strokeRect(ox + c * cell + 1.5, oy + r * cell + 1.5, cell - 3, cell - 3)); }
   if (o.cell) { ctx.strokeStyle = hl; ctx.lineWidth = 3; ctx.strokeRect(ox + o.cell[1] * cell + 1.5, oy + o.cell[0] * cell + 1.5, cell - 3, cell - 3); }
+  if (o.win) { const [r0, r1, c0, c1] = o.win; ctx.strokeStyle = hl; ctx.lineWidth = cell >= 8 ? 3 : 2; const lw = ctx.lineWidth / 2; // yellow window
+    ctx.strokeRect(ox + c0 * cell + lw, oy + r0 * cell + lw, (c1 - c0 + 1) * cell - 2 * lw, (r1 - r0 + 1) * cell - 2 * lw); }
   if (o.rect) { const [r0, r1, c0, c1] = o.rect; ctx.strokeStyle = hl2; ctx.lineWidth = Math.max(2, Math.min(3, cell / 6));
     const lw = ctx.lineWidth / 2; ctx.strokeRect(ox + c0 * cell + lw, oy + r0 * cell + lw, (c1 - c0 + 1) * cell - 2 * lw, (r1 - r0 + 1) * cell - 2 * lw);
     ctx.fillStyle = hl2; ctx.globalAlpha = .18; ctx.fillRect(ox + c0 * cell, oy + r0 * cell, (c1 - c0 + 1) * cell, (r1 - r0 + 1) * cell); ctx.globalAlpha = 1; }

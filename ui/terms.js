@@ -1,5 +1,5 @@
 // ui/terms.js — dotted inline definitions (tooltip on hover, focus or tap) and the Terms section.
-// Shared by every page. A page links ../ui/terms.css, has <div id="tip" role="tooltip"></div> and an empty
+// Shared by every page, each with its own list of terms (TERMS for the CNN pages, VIT_TERMS for the ViT page). A page links ../ui/terms.css, has <div id="tip" role="tooltip"></div> and an empty
 // .gloss element, and calls installTerms once its static text is in the DOM. Dynamic text (readouts, hints
 // rewritten on every step) is left unlinked on purpose.
 
@@ -30,12 +30,34 @@ export const TERMS = [
   ['heldout', /\bheld-out\b/i, 'Held-out test set', 'Digits the network never trains on, kept only to measure accuracy. Accuracy on the training digits can be flattered by memorising them; held-out accuracy cannot.'],
   ['init', /\binitiali[sz]ation\b/i, 'Initialisation', 'The random starting values of the weights. Small random numbers, not zeros: identical weights would get identical gradients and never become different detectors.'],
 ];
-const termById = Object.fromEntries(TERMS.map((t) => [t[0], t]));
+
+/** The ViT page's terms. Longer phrases come before the words inside them ("patch embedding" before "patch"), so that
+ *  at the same position the longer one is linked. */
+export const VIT_TERMS = [
+  ['patchemb', /\bpatch embedding\b/i, 'Patch embedding', 'The first layer of a ViT: each 4×4 patch of pixels becomes 8 numbers through 8 learned kernels. It is a convolution whose stride equals its size, so the windows never overlap.'],
+  ['patch', /\bpatch(es)?\b/i, 'Patch', 'A square tile of the image, 4×4 pixels here. The 16×16 digit is cut into 16 of them, numbered in reading order.'],
+  ['position', /\bposition (embedding|table)s?\b/i, 'Position embedding', 'A learned row of 8 numbers per patch slot, added to the token in that slot. Attention by itself treats the tokens as a set; this table is the only way the model can know where a patch sat.'],
+  ['token', /\btokens?\b/i, 'Token', 'One vector per patch, 8 numbers here, carried through the network as one row. Every step except attention works on each token separately.'],
+  ['head', /\b(attention )?heads?\b/i, 'Attention head', 'One complete attention pattern with its own queries, keys and values. This model has two, each 4 numbers wide; their outputs are joined back into 8 numbers and mixed by Wo.'],
+  ['attention', /\b(self-)?attention\b/i, 'Attention', 'Each token builds its output as a weighted average of every token\'s value. The weights come from how well its query matches each key, through a softmax, so they are positive and sum to 1. They are computed from the image: where a token looks is not fixed, unlike a kernel\'s window.'],
+  ['qkv', /\bquer(y|ies)\b/i, 'Query, key, value', 'Three learned projections of each token. The query is what the token looks for, the key what it offers to others, the value what it hands over. Score(i, j) = query i · key j / √4.'],
+  ['layernorm', /\bLayerNorm\b/, 'LayerNorm', 'Rescales each token on its own to mean 0 and variance 1 across its 8 numbers, then applies a learned scale and shift per column. It keeps the numbers in range from step to step.'],
+  ['residual', /\bresidual( connection)?s?\b/i, 'Residual connection', 'A block\'s input is added back to its output: z₁ = z₀ + attention, z₂ = z₁ + MLP. The block only has to learn a correction, and each token keeps its own information, which is why its own patch stays full green.'],
+  ['mlp', /\bMLP\b/, 'MLP', 'Multilayer perceptron: two fully connected layers, 8 → 32 → 8, with GELU between them, applied to each token separately. In CNN terms, two 1×1 convolutions.'],
+  ['gelu', /\bGELU\b/, 'GELU', 'Gaussian error linear unit, a smooth cousin of ReLU: close to 0 for large negative inputs, close to x for large positive ones, curved in between. Computed here in its tanh form.'],
+  ['avg', /\baverage of the tokens\b/i, 'Average of the tokens', 'The 16 tokens averaged into one vector of 8 numbers, like the CNN\'s global average pooling, then turned into 10 class scores. The original ViT reads an extra class token instead; with a single block, only that token\'s row would reach the answer.'],
+  ['kernel', /\bkernels?\b/i, 'Kernel (filter)', 'A small grid of learned weights, 4×4 here. In the patch embedding each of the 8 kernels reads one patch at a time and gives one of the token\'s 8 numbers.'],
+  ['stride', /\bstride\b/i, 'Stride', 'How far the window jumps between outputs. With stride 4 and a 4×4 kernel the windows tile the image exactly: that is what cutting it into patches means.'],
+  ['softmax', /\bsoftmax\b/i, 'Softmax', 'Turns scores into weights that are positive and sum to 1: exp(s) / Σ exp. Used twice here: across each row of an attention map, and over the 10 classes.'],
+  ['rf', /\breceptive field\b/i, 'Receptive field', 'The part of the input a value can depend on. Before attention a token\'s receptive field is its own patch; after one attention step it is the whole image, which the green shades by attention weight.'],
+  ['weights', /\bweights\b/i, 'Weights / parameters', 'The numbers a network learns: the patch kernels, the position table, every matrix and bias, the LayerNorm scales and shifts. Tinted wherever they sit. Softmax, GELU, the average and the residual additions are fixed arithmetic.'],
+  ['heldout', /\bheld-out\b/i, 'Held-out test set', 'Digits the network never trained on, kept only to measure accuracy.'],
+];
 
 /** Wrap the first mention of each term inside every element matching `selectors` in a <dfn>.
  *  Terms are taken in order of appearance in the text, so a term is never skipped because another one
  *  listed earlier in TERMS happens to occur later in the same paragraph. */
-export function linkTerms(selectors) {
+export function linkTerms(selectors, terms = TERMS) {
   document.querySelectorAll(selectors).forEach((el) => {
     const seen = new Set();
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT); const nodes = []; while (walker.nextNode()) nodes.push(walker.currentNode);
@@ -44,7 +66,7 @@ export function linkTerms(selectors) {
       let text = node.nodeValue;
       for (;;) {
         let best = null;
-        for (const [id, re] of TERMS) { if (seen.has(id)) continue; const m = re.exec(text); if (m && (!best || m.index < best.m.index)) best = { id, m }; }
+        for (const [id, re] of terms) { if (seen.has(id)) continue; const m = re.exec(text); if (m && (!best || m.index < best.m.index)) best = { id, m }; }
         if (!best) break;
         const { id, m } = best; seen.add(id);
         const before = document.createTextNode(text.slice(0, m.index));
@@ -58,7 +80,8 @@ export function linkTerms(selectors) {
 }
 
 /** Show a <dfn>'s definition in `tip` on hover and keyboard focus; a click or tap toggles it. */
-export function bindTooltip(tip) {
+export function bindTooltip(tip, terms = TERMS) {
+  const termById = Object.fromEntries(terms.map((t) => [t[0], t]));
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const show = (d) => {
     const t = termById[d.dataset.t]; tip.innerHTML = `<b>${t[2]}</b>${t[3]}`; tip.style.display = 'block';
@@ -80,13 +103,14 @@ export function bindTooltip(tip) {
 }
 
 /** Fill the Terms section with every definition. */
-export function renderGlossary(el) {
-  el.innerHTML = TERMS.map((t) => `<div><b>${t[2]}</b> — ${t[3]}</div>`).join('');
+export function renderGlossary(el, terms = TERMS) {
+  el.innerHTML = terms.map((t) => `<div><b>${t[2]}</b> — ${t[3]}</div>`).join('');
 }
 
-/** Link terms in the elements matching `selectors`, bind the tooltip element, fill the glossary element. */
-export function installTerms({ selectors, tip, gloss }) {
-  linkTerms(selectors);
-  if (tip) bindTooltip(tip);
-  if (gloss) renderGlossary(gloss);
+/** Link terms in the elements matching `selectors`, bind the tooltip element, fill the glossary element.
+ *  `terms` is the page's list: TERMS for the CNN pages (the default), VIT_TERMS for the ViT page. */
+export function installTerms({ selectors, tip, gloss, terms = TERMS }) {
+  linkTerms(selectors, terms);
+  if (tip) bindTooltip(tip, terms);
+  if (gloss) renderGlossary(gloss, terms);
 }
