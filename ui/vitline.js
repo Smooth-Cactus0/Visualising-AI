@@ -50,7 +50,7 @@ export function line(box, rows, cell, { labels = null } = {}) {
       const parts = [];
       if (it.up) { const u = el('up'); u.append(...it.up); u.style.gridRow = gr(1); parts.push(u); }
       const a = el('at' + (it.w ? ' w' : '')); if (it.grid) a.style.gridTemplateColumns = `repeat(${it.grid}, auto)`; a.append(...it.v); a.style.gridRow = gr(2); if (it.id) a.dataset.id = it.id; parts.push(a);
-      const l = el('lb', it.lb || ''); l.style.gridRow = gr(3); parts.push(l);
+      const l = el('lb', it.lb || ''); l.style.gridRow = gr(3); if (bands.length > 1) l.style.marginBottom = '14px'; parts.push(l); // room for the residual arcs under the labels
       for (const p of parts) { p.style.gridColumn = col; if (it.sec) p.dataset.sec = it.sec; box.append(p); }
       a.style.marginTop = Math.max(0, (T * cell - a.offsetHeight) / 2) + 'px';
     });
