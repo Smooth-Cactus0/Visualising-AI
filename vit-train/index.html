@@ -344,15 +344,15 @@ function describe(p) {
     const w0 = tensor(b, null, wBefore())[p.r][p.c], io = IN_OUT[b], r = p.r, c = p.c;
     const ok = !!shown && STAGE_OF[b] <= shownStageNow(), g = ok ? tensor(b, null, shown)[r][c] : null;
     const L = cur.phase === P.UPD && cur.applied && cur.lrApplied != null ? cur.lrApplied : lr;
-    const T16 = 'Σ over the 16 tokens of ';
+    const T16 = 'Σ over the 16 tokens of ', G = b === 'W1' || b === 'b1' ? 'GELU′ × ' : ''; // the MLP's GELU sits between W₁/b₁ and hidden
     const OUT = { bq: 'query', bk: 'key', bv: 'value', bo: 'z₁', b1: 'hidden', b2: 'z₂' }, LNO = { ln1: 'LayerNorm 1 output', ln2: 'LayerNorm 2 output' };
     let how;
     if (b === 'Wh') how = `normalised average[${r}] × ∂L/∂score[${c}]`;
     else if (b === 'bh') how = `∂L/∂score[${c}]`;
     else if (b === 'Wp') how = `Σ over the 16 patches of pixel ${c} of the patch × ∂L/∂token[t, ${r}]`;
     else if (b === 'bp') how = `${T16}∂L/∂token[t, ${c}]`;
-    else if (io) how = `${T16}${io[0]}[t, ${r}] × ∂L/∂${io[1]}[t, ${c}]`;
-    else if (OUT[b]) how = `${T16}∂L/∂${OUT[b]}[t, ${c}]`;
+    else if (io) how = `${T16}${io[0]}[t, ${r}] × ${G}∂L/∂${io[1]}[t, ${c}]`;
+    else if (OUT[b]) how = `${T16}${G}∂L/∂${OUT[b]}[t, ${c}]`;
     else if (LNO[b]) how = r === 0 ? `${T16}∂L/∂${LNO[b]}[t, ${c}] × x̂[t, ${c}], the normalised input` : `${T16}∂L/∂${LNO[b]}[t, ${c}]`;
     else if (b === 'lnf') how = r === 0 ? `∂L/∂(normalised average)[${c}] × x̂[${c}]` : `∂L/∂(normalised average)[${c}]`;
     else if (b === 'pos') how = `∂L/∂z₀[${r}, ${c}]: the position entry is added to token ${r} alone`;
