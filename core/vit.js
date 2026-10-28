@@ -369,7 +369,7 @@ export function gradTrace(S, probe) {
   put(t, r, c, 1);
   const hd = Math.floor(c / DH), c0 = hd * DH, c1 = c0 + DH - 1;
   switch (base) {
-    case 'prob': put('prob', 0, c, 1); break; // p − y: this class's probability, and the label
+    case 'prob': put('prob', 0, c, 1); break; // p − y: this class's probability (the label is not a drawn tensor)
     case 'avgNorm': row('dprob', 0, 1); row('Wh', c, 1); break;
     case 'avg': row('davgNorm', 0, 1); row('dprob', 0, 1); row('lnf', 0, 1); break;
     case 'z2': put('davg', 0, c, 1); row('davgNorm', 0, 1); row('dprob', 0, 1); break;
