@@ -6,6 +6,7 @@
 <title>ViT explorer — patches, tokens and attention</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
 <link rel="stylesheet" href="../ui/terms.css">
+<link rel="stylesheet" href="../ui/vitline.css">
 <style>
 :root{
   box-sizing:border-box;
@@ -71,19 +72,6 @@ input[type=range]{accent-color:var(--accent)}
 .readout{flex:1 1 480px;font-size:13px;color:var(--ink2);min-height:1.5em}
 .readout b{color:var(--ink);font-weight:600}
 @media (max-width:700px){ .ov{position:static} }
-/* a line of tensors: storey (keys and values) over the token rows, labels under */
-.wrap{overflow-x:auto;padding-bottom:4px}
-.line{display:grid;grid-template-rows:auto auto auto;column-gap:8px;row-gap:3px;width:max-content;align-items:start;position:relative;padding-bottom:14px}
-.line .up{grid-row:1;align-self:end;justify-self:center;display:grid;gap:3px}
-.line .at{grid-row:2;display:grid;gap:3px;justify-items:start;justify-self:center}
-.line .at.w{background:var(--wtint);border:1px solid var(--accent);border-radius:4px;padding:2px}
-.line .lb{grid-row:3;font-size:11.5px;color:var(--ink2);text-align:center;white-space:nowrap;line-height:1.25}
-.line .op{grid-row:2;margin-top:var(--mid);font-family:var(--mono);font-size:12px;color:var(--ink2);white-space:nowrap}
-.line .sl{font-size:11px;color:var(--ink2)}
-.line [data-sec]{cursor:pointer}
-.kg{display:grid;gap:3px}
-.kg canvas.pick{cursor:pointer}
-svg.arcs{position:absolute;left:0;top:0;pointer-events:none;overflow:visible}
 @media (prefers-reduced-motion: reduce){ *{transition:none!important;scroll-behavior:auto!important} }
 </style>
 </head>
@@ -161,7 +149,8 @@ svg.arcs{position:absolute;left:0;top:0;pointer-events:none;overflow:visible}
 import { SHAPES, P, T, D, DH, NC, init, forward, tensor, vitTrace, isWeights, paramCount } from '../core/vit.js';
 import { parseMnist16, image } from '../core/data.js';
 import { shuffledOrder } from '../core/train.js';
-import { drawGrid, cellAt, fmt, maxAbs, cssVar } from '../ui/grid.js';
+import { fmt, maxAbs } from '../ui/grid.js';
+import { createViews, line, arcs, paint, el } from '../ui/vitline.js';
 import { installTerms, VIT_TERMS } from '../ui/terms.js';
 const $ = (id) => document.getElementById(id);
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -176,59 +165,9 @@ let probe = null, head = 0, kSel = 0, sweep = 5, walk = { i: 0, step: 0 };
 let S = null;
 const W = () => (useTrained && wTrained ? wTrained : wRandom);
 
-// ---------- views: one canvas showing (part of) a tensor, by its SHAPES key ----------
-const views = []; // { cv, key, rows, cols, cell, map, yl, own, bars, blocks }
-const kOf = (v) => (typeof v.key === 'function' ? v.key() : v.key);
-const el = (cls, text) => { const d = document.createElement('div'); d.className = cls; if (text != null) d.textContent = text; return d; };
-/** A canvas for tensor `key` at `cell` px a cell. o.rows, o.cols and o.map(r, c) → [row, col] in the tensor show a part
- *  of it; o.yl() gives the yellow ({ win, cell }); o.own() replaces the hover's green; o.bars draws probabilities. */
-function view(key, cell, o = {}) {
-  const [R, C] = SHAPES[typeof key === 'function' ? key() : key];
-  const v = { key, cell, rows: o.rows ?? R, cols: o.cols ?? C, map: o.map || ((r, c) => [r, c]), yl: o.yl, own: o.own, bars: o.bars, blocks: o.blocks };
-  const cv = document.createElement('canvas'); v.cv = cv;
-  cv.width = o.px ? o.px[0] : v.cols * cell; cv.height = o.px ? o.px[1] : v.rows * cell;
-  cv.style.width = cv.width + 'px'; cv.style.height = cv.height + 'px';
-  const probeAt = (ev) => { const p = v.bars ? barAt(v, ev) : cellAt(cv, ev); setProbe(p ? { t: kOf(v), ...rc(v.map(p[0], p[1])) } : null); };
-  cv.addEventListener('pointermove', probeAt);
-  cv.addEventListener('pointerdown', probeAt);
-  cv.addEventListener('pointerleave', (ev) => { if (ev.pointerType !== 'touch') setProbe(null); });
-  views.push(v); return cv;
-}
-const rc = ([r, c]) => ({ r, c });
+// ---------- views and lines (ui/vitline.js): every copy of a tensor lights together ----------
+const { views, view, kOf } = createViews({ shapeOf: (key) => SHAPES[key], onProbe: setProbe });
 function setProbe(p) { if (JSON.stringify(p) !== JSON.stringify(probe)) { probe = p; render(); } }
-
-/** Lay out columns on a grid: { op, id } is an operator; { v: [elements], up, lb, w, grid, sec, id } a column, `up` above
- *  the token rows (keys and values), `w` tinted as learned, `grid` its number of sub-columns, `sec` the section a click
- *  on it scrolls to. */
-function line(box, items, cell) {
-  box.className = 'line'; box.innerHTML = ''; box.style.setProperty('--mid', Math.max(0, T * cell / 2 - 9) + 'px');
-  items.forEach((it, x) => {
-    const col = String(x + 1);
-    if (it.op != null) { const o = el('op', it.op); o.style.gridColumn = col; if (it.id) o.dataset.id = it.id; box.append(o); return; }
-    const parts = [];
-    if (it.up) { const u = el('up'); u.append(...it.up); parts.push(u); }
-    const a = el('at' + (it.w ? ' w' : '')); if (it.grid) a.style.gridTemplateColumns = `repeat(${it.grid}, auto)`; a.append(...it.v); if (it.id) a.dataset.id = it.id; parts.push(a);
-    parts.push(el('lb', it.lb || ''));
-    for (const p of parts) { p.style.gridColumn = col; if (it.sec) p.dataset.sec = it.sec; box.append(p); }
-    a.style.marginTop = Math.max(0, (T * cell - a.offsetHeight) / 2) + 'px'; // shorter columns sit level with the middle of the tokens
-  });
-}
-/** Dashed residual arcs under a line's labels, from a tensor's column to the + that adds it back. */
-function arcs(box, pairs) {
-  box.querySelector('svg.arcs')?.remove();
-  const b = box.getBoundingClientRect(); if (!b.width) return;
-  const labs = [...box.querySelectorAll('.lb')].map((l) => l.getBoundingClientRect().bottom - b.top);
-  const y = Math.max(...labs) + 6; let d = '';
-  for (const [from, to] of pairs) {
-    const A = box.querySelector(`[data-id="${from}"]`).getBoundingClientRect(), B = box.querySelector(`[data-id="${to}"]`).getBoundingClientRect();
-    const xa = A.left + A.width / 2 - b.left, xb = B.left + B.width / 2 - b.left;
-    d += `M${xa} ${y - 5}V${y}H${xb}V${B.bottom - b.top + 2}`;
-  }
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.classList.add('arcs');
-  svg.setAttribute('width', b.width); svg.setAttribute('height', y + 4);
-  svg.innerHTML = `<path d="${d}" fill="none" stroke="var(--ink2)" stroke-width="1" stroke-dasharray="3 2"/>`;
-  box.append(svg);
-}
 const kernels = (cell, cols, pickable) => {
   const g = el('kg'); g.style.gridTemplateColumns = `repeat(${cols}, auto)`;
   for (let d = 0; d < D; d++) {
@@ -322,22 +261,6 @@ function build() {
 }
 const layout = () => { arcs($('ovLine'), [['z0', 'add1'], ['z1', 'add2']]); document.documentElement.style.setProperty('--ovh', ($('ov').offsetHeight + 10) + 'px'); };
 
-// ---------- probabilities as bars ----------
-function drawBars(v, vals, glow) {
-  const { cv } = v, ctx = cv.getContext('2d'), h = cv.height / NC, wd = cv.width, top = vals.indexOf(Math.max(...vals));
-  const lab = h >= 14, x0 = lab ? 16 : 0, x1 = lab ? wd - 46 : wd;
-  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, wd, cv.height);
-  ctx.font = `${Math.min(12, h * 0.6)}px ${getComputedStyle(document.body).fontFamily}`; ctx.textBaseline = 'middle';
-  for (let c = 0; c < NC; c++) {
-    const y = c * h;
-    ctx.fillStyle = cssVar('--line2'); ctx.fillRect(x0, y + 1, x1 - x0, h - 2);
-    ctx.fillStyle = cssVar('--accent'); ctx.globalAlpha = c === top ? 1 : 0.6; ctx.fillRect(x0, y + 1, (x1 - x0) * vals[c], h - 2); ctx.globalAlpha = 1;
-    if (glow && glow[c] > 0) { ctx.strokeStyle = cssVar('--hl2'); ctx.lineWidth = 2; ctx.strokeRect(x0 + 1, y + 1, x1 - x0 - 2, h - 2); }
-    if (lab) { ctx.fillStyle = cssVar('--ink2'); ctx.textAlign = 'left'; ctx.fillText(String(c), 2, y + h / 2); ctx.textAlign = 'right'; ctx.fillText(pct(vals[c]), wd - 2, y + h / 2); }
-  }
-}
-function barAt(v, ev) { const b = v.cv.getBoundingClientRect(), r = Math.floor((ev.clientY - b.top) / (b.height / NC)); return r >= 0 && r < NC ? [r, 0] : null; }
-
 // ---------- render ----------
 function render() {
   if (!img) return;
@@ -345,16 +268,8 @@ function render() {
   S = forward(w, img, { position, order });
   const green = vitTrace(S, probe), scale = {};
   for (const v of views) {
-    const key = kOf(v), M = tensor(key, S, w), C = SHAPES[key][1];
-    const G = v.own ? v.own() : green[key];
-    const vals = new Float32Array(v.rows * v.cols), glow = G ? new Float32Array(v.rows * v.cols) : null;
-    for (let r = 0; r < v.rows; r++) for (let c = 0; c < v.cols; c++) {
-      const [mr, mc] = v.map(r, c); vals[r * v.cols + c] = M[mr][mc]; if (glow) glow[r * v.cols + c] = G[mr * C + mc];
-    }
-    if (v.bars) { drawBars(v, vals, glow); continue; }
-    const s = key === 'digit' ? 1 : (scale[key] ??= maxAbs(M.flat()));
-    const y = v.yl ? v.yl() : {};
-    drawGrid(v.cv, vals, v.cols, v.rows, { mode: key === 'digit' ? null : 'div', scale: s, glow, lines: v.cell >= 7, blocks: v.blocks, win: y.win, cell: y.cell });
+    const key = kOf(v), M = tensor(key, S, w), s = key === 'digit' ? 1 : (scale[key] ??= maxAbs(M.flat()));
+    paint(v, M, SHAPES[key][1], v.own ? v.own() : green[key], s, v.yl ? v.yl() : {}, { gray: key === 'digit' });
   }
   $('readout').innerHTML = describe(probe);
   $('m1').innerHTML = patchMath(); $('m2').textContent = shuffleText(); $('m3').innerHTML = attentionMath(); $('m5').innerHTML = headMath();
