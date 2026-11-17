@@ -78,7 +78,7 @@ main a{color:var(--accent)}
 </head>
 <body>
 <main>
-<nav class="crumb"><a href="../">Visualising AI</a> › Vision Transformer, explorer</nav>
+<nav class="crumb"><a href="../">Visualising AI</a> › Vision Transformer, 2D explorer</nav>
 <h1>ViT explorer</h1>
 <p class="lede">A ViT diagram says "patch embedding → + position → encoder (Norm → multi-head attention → + → Norm → MLP → +) → classifier". This page runs one small enough that every number fits on screen: a 16×16 digit cut into 16 patches, 8 numbers per token, one encoder block with two attention heads, <span id="pc">1,242</span> weights. The line below is the whole forward pass, token i always on row i; the sections zoom into one part at a time. The <a href="../vit-3d/">3D explorer</a> shows the same network as blocks, each token where its patch was.</p>
 <div class="keys"><span><i></i> the window being computed: one patch, or one score</span><span><i class="g"></i> what a hovered value is computed from; after attention, shaded by attention weight</span><span><i class="wt"></i> learned weights, where they act</span></div>

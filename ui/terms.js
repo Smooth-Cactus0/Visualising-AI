@@ -51,7 +51,7 @@ export const VIT_TERMS = [
   ['stride', /\bstride\b/i, 'Stride', 'How far the window jumps between outputs. With stride 4 and a 4×4 kernel the windows tile the image exactly: that is what cutting it into patches means.'],
   ['softmax', /\bsoftmax\b/i, 'Softmax', 'Turns scores into weights that are positive and sum to 1: exp(s) / Σ exp. Used twice here: across each row of an attention map, and over the 10 classes.'],
   ['rf', /\breceptive field\b/i, 'Receptive field', 'The part of the input a value can depend on. Before attention a token\'s receptive field is its own patch; after one attention step it is the whole image, which the green shades by attention weight.'],
-  ['weights', /(?<!attention )\bweights\b/i, 'Weights / parameters', 'The numbers a network learns: the patch kernels, the position table, every matrix and bias, the LayerNorm scales and shifts. Tinted wherever they sit. Softmax, GELU, the average and the residual additions are fixed arithmetic.'],
+  ['weights', /(?<!attention )\bweights\b/i, 'Weights / parameters', 'The numbers a network learns: the patch kernels, the position table, every matrix and bias, the LayerNorm scales and shifts. Tinted on the 2D pages and framed in 3D wherever they sit. Softmax, GELU, the average and the residual additions are fixed arithmetic.'],
   ['heldout', /\bheld-out\b/i, 'Held-out test set', 'Digits the network never trained on, kept only to measure accuracy.'],
 ];
 

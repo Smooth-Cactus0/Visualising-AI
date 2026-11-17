@@ -126,7 +126,7 @@ main a{color:var(--accent)}
   <div class="note">Each attention map is 16 × 16: row i is where token i looks. The similarity picture puts, at each patch slot, a 4 × 4 map of how alike that slot's row of the position table is to every other slot's (orange alike, blue opposite). In the ViT paper, trained on millions of images, these maps form a 2D grid: neighbours alike. Here, on 3,000 digits, no grid forms (measured on the explorer's shipped weights and on Adam-trained weights: neighbouring slots are no more alike than distant ones), yet the model leans on position: switched off, the held-out accuracy of the explorer's shipped weights (one run) falls from 82% to 34%. It uses each row as a label for its slot, not as a map.</div>
   <div class="cap" style="margin-top:14px">Recent digits, with the guess made at the time</div>
   <div class="thumbs" id="thumbs"></div>
-  <div class="ctrls" id="handoff"><button id="useBtn">Use these weights in the ViT explorer</button><button id="dlBtn">Download JSON</button><span class="cap" id="useMsg"></span></div>
+  <div class="ctrls" id="handoff"><button id="useBtn">Use these weights in the 2D / 3D ViT explorers</button><button id="dlBtn">Download JSON</button><span class="cap" id="useMsg"></span></div>
 </section>
 
 <section id="s3">
@@ -423,7 +423,7 @@ function bundle() {
 }
 $('useBtn').onclick = () => {
   const o = bundle();
-  try { saveTrainedViT(o); $('useMsg').innerHTML = `Stored (held-out ${pct(o.meta.testAcc)}). The <a href="../vit/">ViT explorer</a> will use these weights until you go back to the shipped ones there.`; }
+  try { saveTrainedViT(o); $('useMsg').innerHTML = `Stored (held-out ${pct(o.meta.testAcc)}). Open the <a href="../vit/">2D</a> or <a href="../vit-3d/">3D</a> ViT explorer: it will use these weights until you go back to the shipped ones there.`; }
   catch { $('useMsg').textContent = 'Could not store the weights: this browser blocks local storage. Download JSON still works.'; }
 };
 $('dlBtn').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(bundle())], { type: 'application/json' })); a.download = `vit16-${digitsSeen}-digits.json`; a.click(); URL.revokeObjectURL(a.href); };
