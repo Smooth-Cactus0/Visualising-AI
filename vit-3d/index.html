@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ViT explorer 3D — tokens where their patches are</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../ui/terms.css">
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  --bg:#f7f8f6; --panel:#ffffff; --ink:#1d2430; --ink2:#5b6474; --line:#d9ddd6; --line2:#eef0ec;
+  --accent:#2457a8; --accent-soft:#dde7f7; --scene:#eef0ea; --wtint:rgba(36,87,168,.07);
+  --hl:#ffd94a; --hl2:#3fae4b;
+  --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#171a1f; --panel:#1f232a; --ink:#e8eaee; --ink2:#9aa3b2; --line:#343a44; --line2:#272c35;
+  --accent:#7fa7ea; --accent-soft:#263650; --scene:#1b1f26; --hl:#d9b32d; --hl2:#5ad66a; --wtint:rgba(127,167,234,.09);
+}}
+:root[data-theme="dark"]{
+  --bg:#171a1f; --panel:#1f232a; --ink:#e8eaee; --ink2:#9aa3b2; --line:#343a44; --line2:#272c35;
+  --accent:#7fa7ea; --accent-soft:#263650; --scene:#1b1f26; --hl:#d9b32d; --hl2:#5ad66a; --wtint:rgba(127,167,234,.09);
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px);height:100%}
+*{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Public Sans",system-ui,sans-serif;font-size:14.5px;line-height:1.45;-webkit-font-smoothing:antialiased;height:100%}
+main{max-width:1280px;margin:0 auto;padding:22px 18px 60px}
+main a{color:var(--accent)}
+h1{font-size:26px;font-weight:600;margin:0 0 4px}
+h2{font-size:15px;font-weight:600;margin:14px 0 4px}
+.lede{color:var(--ink2);margin:0 0 14px;max-width:none}
+.wrap{display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start}
+@media (max-width:860px){ .wrap{grid-template-columns:1fr} }
+#view{position:relative;background:var(--scene);border:1px solid var(--line);border-radius:10px;height:min(600px,72vh);min-height:320px;overflow:hidden;touch-action:none}
+#view canvas{display:block;width:100%!important;height:100%!important}
+.lbl{position:absolute;transform:translate(-50%,-100%);font-size:12.5px;color:var(--ink2);text-align:center;pointer-events:none;white-space:nowrap;line-height:1.3}
+.lbl b{display:block;color:var(--ink);font-weight:600}
+#readout{position:absolute;left:10px;bottom:10px;right:10px;font-size:13px;background:color-mix(in srgb,var(--panel) 88%,transparent);border:1px solid var(--line);border-radius:7px;padding:8px 12px;pointer-events:none;min-height:2.2em}
+#readout b{font-weight:600}
+.cams{position:absolute;top:10px;left:10px;display:flex;gap:6px;flex-wrap:wrap}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--panel)}
+.seg button{border:0;border-radius:0}
+.seg button+button{border-left:1px solid var(--line)}
+.lat{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:12.5px;color:var(--ink2)}
+.lat input{flex:1}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+button,select{font:inherit;font-size:13px;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:4px 9px;cursor:pointer}
+button:hover,select:hover{border-color:var(--accent)}
+button:disabled{opacity:.45;cursor:default}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.sel{background:var(--accent-soft);border-color:var(--accent)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ctrls{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+.digits button{min-width:26px;padding:4px 0}
+.ctl{display:inline-flex;align-items:center;gap:5px;font-size:13px;color:var(--ink2)}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.hint{font-size:12.5px;color:var(--ink2)}
+.hint b{color:var(--ink)}
+.banner{font-size:13.5px;background:var(--accent-soft);border:1px solid var(--accent);border-radius:8px;padding:8px 12px;margin:0 0 14px;max-width:78ch}
+.banner a{color:var(--accent)}
+.keys{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--ink2);margin:8px 0 0}
+.keys span{display:inline-flex;align-items:center;gap:5px}
+.keys i{display:inline-block;flex:none;width:12px;height:12px;border-radius:3px;border:3px solid var(--hl)}
+.keys i.g{border-color:var(--hl2)}
+.keys i.wt{border:1px solid var(--accent);background:var(--wtint)}
+.crumb{font-size:13px;color:var(--ink2);margin:0 0 10px}.crumb a{color:var(--accent);text-decoration:none}.crumb a:hover{text-decoration:underline}
+@media (prefers-reduced-motion: reduce){ *{transition:none!important} }
+</style>
+</head>
+<body>
+<main>
+<nav class="crumb"><a href="../">Visualising AI</a> › Vision Transformer, 3D explorer</nav>
+<h1>ViT explorer, in 3D</h1>
+<p class="lede">The toy Vision Transformer of the <a href="../vit/">explorer</a>, drawn as blocks of cubes, one cube per number. Each token sits where its patch was: the 16 tokens make a 4×4 block whose depth is the token's 8 numbers, the shape of a CNN feature map. Each head's attention map is a slab of 16 little 4×4 maps, one at each token's place, showing where in the image that token looks. Cube size is magnitude and colour is sign (blue negative, orange positive). Drag to orbit, scroll to zoom, right-drag to pan. Hover a cube to see what it is computed from; click to pin it while you turn the view.</p>
+<div class="wrap">
+  <div>
+    <div id="view">
+      <div class="cams"><button data-cam="whole" class="sel">whole</button><button data-cam="embedding">embedding</button><button data-cam="attention">attention</button><button data-cam="MLP">MLP</button><button data-cam="head">head</button></div>
+      <div class="cams" style="left:auto;right:10px"><span class="seg"><button id="laySide" class="sel">side by side</button><button id="layDepth">depth</button></span></div>
+      <div id="readout">Hover a cube.</div>
+    </div>
+    <div class="lat"><span>start</span><input type="range" id="lateral" min="0" max="1000" value="500" title="scroll along the network"><span>end</span></div>
+  </div>
+  <div class="panel">
+    <h2 style="margin-top:0">Digit</h2>
+    <div class="ctrls"><span class="digits" id="digits"></span><button id="another">another</button></div>
+    <div class="hint" id="dlab"></div>
+    <h2>Weights and position</h2>
+    <div class="ctrls"><span class="seg"><button id="wTr" class="sel">trained</button><button id="wRa">random</button></span>
+      <span class="seg"><button id="pOn" class="sel">position on</button><button id="pOff">off</button></span></div>
+    <div class="ctrls"><button id="shuf">Shuffle patches</button><button id="unshuf" disabled>Restore order</button></div>
+    <div class="hint" id="wsrc"></div>
+    <h2>Patch sweep</h2>
+    <div class="ctrls"><button id="swPrev">←</button><button id="swPlay" class="primary">Play</button><button id="swNext">→</button><button id="swOff">off</button></div>
+    <input type="range" id="swStep" min="0" max="15" value="0">
+    <div class="hint" id="swHint">The patch embedding is a convolution whose kernel is as big as its stride: 8 kernels of 4×4 jump 4 pixels at a time, and each patch becomes one token of 8 numbers.</div>
+    <div class="keys"><span><i></i> the window being computed</span><span><i class="g"></i> what a value is computed from, after attention by attention weight</span><span><i class="wt"></i> learned weights</span></div>
+    <div class="hint" style="margin-top:10px" id="wnote"></div>
+  </div>
+</div>
+<div class="panel" style="margin-top:16px">
+  <h2 style="margin-top:0">Terms</h2>
+  <div class="hint" style="margin-bottom:8px">Hover or tap a dotted term above for the same definition in place.</div>
+  <div class="gloss" id="gloss"></div>
+</div>
+</main>
+<div id="tip" role="tooltip"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script type="module">
+import { P, T, D, NC, init, forward, tensor, vitTrace } from '../core/vit.js';
+import { image } from '../core/data.js';
+import { shuffledOrder } from '../core/train.js';
+import { VIT_BLOCKS, blockOf, cubeToCell, sliceValues, traceBoxes, attentionFan } from '../core/vit3d.js';
+import { fmt } from '../ui/grid.js';
+import { installTerms, VIT_TERMS } from '../ui/terms.js';
+import { describe, weightWords, loadDigitsAndWeights } from '../ui/vitwords.js';
+import { createBlockView } from '../ui/blocks3d.js';
+const $ = (id) => document.getElementById(id);
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const LAYOUT_KEY = 'dl-explorer.vit3d.layout';
+
+// ---------- state ----------
+const wRandom = init(1);
+let wTrained = null, meta = null, useTrained = true;
+let data = null, byClass = [], pick = { cls: 7, n: 0 }, img = null;
+let position = true, order = null, shuffles = 0;
+let hover = null, pinned = null, sweep = null, swTimer = null;
+let S = null;
+const W = () => (useTrained && wTrained ? wTrained : wRandom);
+const value = (t, r, c) => tensor(t, S, W())[r][c];
+
+// ---------- the scene (blocks drawn by ../ui/blocks3d.js; which tensor each block draws, in ../core/vit3d.js) ----------
+let layout = 'side'; try { layout = localStorage.getItem(LAYOUT_KEY) || 'side'; } catch { /* storage blocked */ }
+const view = createBlockView($('view'), { explode: 0.5, layout, gapX: 5, gapZ: 9, lateral: $('lateral'), ease: reduce ? 1 : 0.12, declutter: true });
+const frames = new THREE.Group(); view.scene.add(frames);
+const frameMat = new THREE.LineBasicMaterial({ color: 0x2457a8, transparent: true, opacity: 0.6 });
+// A label is a name and a line under it (blocks3d splits at \n). Biases, K and V share the label of the block above them.
+const LABEL = { digit: 'digit\n16×16', Wp: 'patch kernels\n8 of 4×4', xp: 'tokens\n4×4×8', pos: 'position\n4×4×8', z0: 'z₀\ntokens + position', ln1: 'LN₁\nscale, shift', h1: 'LN₁(z₀)\n4×4×8',
+  Wq: 'Wq Wk Wv\n8×8 each', q: 'Q K V\nhead 1 front, 2 back', att: 'attention\na 4×4 map per token', o: 'A·V\nheads joined', Wo: 'Wo\n8×8', z1: 'z₁\nz₀ + mix', ln2: 'LN₂\nscale, shift', h2: 'LN₂(z₁)\n4×4×8',
+  W1: 'W₁\n8×32', hid: 'hidden\nGELU, 4×4×32', W2: 'W₂\n32×8', z2: 'z₂\nz₁ + MLP', avg: 'average\n8', lnf: 'LN\nscale, shift', avgNorm: 'normalised\n8', Wh: 'W head\n8×10', prob: 'classes\n10' };
+// Stacks: a bias sits under its matrix, Wq Wk Wv in one column, Q K V beside them. The smaller block comes first and the
+// larger takes its place (`at`), so the next block starts after the larger one.
+const PLACE = {
+  bp: { dy: -3.4 }, Wp: { at: 'bp' },
+  bq: { dy: 5.8 }, bk: { at: 'bq', dy: -5.2 }, bv: { at: 'bq', dy: -16.2 }, Wq: { at: 'bq', dy: 11 }, Wk: { at: 'bq' }, Wv: { at: 'bq', dy: -11 },
+  q: { dy: 11 }, k: { at: 'q' }, v: { at: 'q', dy: -11 },
+  bo: { dy: -5.2 }, Wo: { at: 'bo' }, b1: { dy: -5.2 }, W1: { at: 'b1' }, b2: { dy: -17.2 }, W2: { at: 'b2' }, bh: { dy: -5.2 }, Wh: { at: 'bh' },
+};
+const ORDER = ['digit', 'bp', 'Wp', 'xp', 'pos', 'z0', 'ln1', 'h1', 'bq', 'bk', 'bv', 'Wq', 'Wk', 'Wv', 'q', 'k', 'v', 'att', 'o', 'bo', 'Wo', 'z1', 'ln2', 'h2', 'b1', 'W1', 'hid', 'b2', 'W2', 'z2', 'avg', 'lnf', 'avgNorm', 'bh', 'Wh', 'prob'];
+let scales = {};
+const tensorsOf = (key) => (key === 'att' ? ['att0', 'att1'] : [key]);
+function scaleOf(key) {
+  if (key === 'digit') return 1;
+  return scales[key] ??= Math.max(0.01, ...tensorsOf(key).flatMap((t) => tensor(t, S, W()).flat().map(Math.abs)));
+}
+function defs() {
+  return ORDER.map((key) => { const b = blockOf(key);
+    return { id: key, rows: b.rows, cols: b.cols, chans: b.chans, mode: key === 'digit' ? 'gray' : 'div', scale: () => scaleOf(key), data: (ch) => sliceValues(key, ch, value), label: LABEL[key] || '', ...(PLACE[key] || {}) }; });
+}
+// The learned weights in accent frames, as on the CNN training page's 3D view: a matrix and its bias share one frame.
+const FRAMED = [['Wp', 'bp'], ['pos'], ['ln1'], ['Wq', 'bq'], ['Wk', 'bk'], ['Wv', 'bv'], ['Wo', 'bo'], ['ln2'], ['W1', 'b1'], ['W2', 'b2'], ['lnf'], ['Wh', 'bh']];
+function drawFrames() {
+  frames.clear(); frameMat.color.set(getComputedStyle(document.documentElement).getPropertyValue('--accent').trim());
+  for (const ids of FRAMED) {
+    const bx = new THREE.Box3(); for (const id of ids) { const b = view.blockById(id); bx.union(view.bounds(b, 0, b.rows - 1, 0, b.cols - 1, 0, b.chans - 1)); }
+    bx.expandByScalar(0.4); const size = bx.getSize(new THREE.Vector3());
+    const e = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(size.x, size.y, size.z)), frameMat); e.position.copy(bx.getCenter(new THREE.Vector3())); frames.add(e);
+  }
+}
+
+// ---------- the green: hover or pin (core vitTrace and its boxes) ----------
+const probeOf = (hit) => (hit ? cubeToCell(hit.block.id, hit.r, hit.c, hit.ch) : null);
+const shown = () => hover || pinned;
+function tokenCentre(key, j) { const b = view.blockById(key); return view.voxelPos(b, j >> 2, j & 3, 0).add(view.voxelPos(b, j >> 2, j & 3, b.chans - 1)).multiplyScalar(0.5); }
+function updateHighlights() {
+  view.hl.clear(); const p = shown();
+  if (!p || !S) { $('readout').textContent = 'Hover a cube.'; return; }
+  const trace = vitTrace(S, p);
+  for (const x of traceBoxes(trace)) view.strengthBox(view.blockById(x.key), x.r0, x.r1, x.c0, x.c1, x.ch0, x.ch1, x.s, view.hl);
+  const att = view.blockById('att');
+  for (const f of attentionFan(trace, p)) { // from token i's little map, at token j's place, to the value token j handed over
+    const from = view.voxelPos(att, (f.i >> 2) * 4 + (f.j >> 2), (f.i & 3) * 4 + (f.j & 3), f.h);
+    view.strengthLine(from, tokenCentre('v', f.j), f.s, view.hl);
+  }
+  $('readout').innerHTML = describe(p, S, W()) + (pinned && !hover ? ' <i>(pinned: click empty space to release)</i>' : '');
+}
+
+// ---------- the patch sweep (yellow) ----------
+function updateSweep() {
+  view.aux.clear(); const { swFill, swEdge, swOut, swLine } = view.mats;
+  $('swStep').value = sweep ?? 0;
+  if (sweep == null || !S) { $('swHint').textContent = 'The patch embedding is a convolution whose kernel is as big as its stride: 8 kernels of 4×4 jump 4 pixels at a time, and each patch becomes one token of 8 numbers.'; return; }
+  const s = sweep, pr = s >> 2, pc = s & 3, dg = view.blockById('digit'), kb = view.blockById('Wp'), xb = view.blockById('xp');
+  view.boxAt(dg, pr * P, pr * P + P - 1, pc * P, pc * P + P - 1, 0, view.aux, swFill, swEdge);
+  view.boxSpanZ(kb, 0, P - 1, 0, P - 1, 0, D - 1, view.aux, swFill, swEdge);
+  view.boxSpanZ(xb, pr, pr, pc, pc, 0, D - 1, view.aux, swOut, swEdge);
+  view.connect(view.bounds(dg, pr * P, pr * P + P - 1, pc * P, pc * P + P - 1, 0, 0), view.bounds(xb, pr, pr, pc, pc, 0, D - 1), swLine, view.aux);
+  $('swHint').innerHTML = `Patch ${s} (rows ${pr * P}–${pr * P + P - 1}, columns ${pc * P}–${pc * P + P - 1}): each of the 8 kernels multiplies its 16 pixels and adds its bias, giving token ${s} its 8 numbers: <b>${S.xp[s].map(fmt).join(', ')}</b>.`;
+}
+function stopSweep() { clearInterval(swTimer); swTimer = null; $('swPlay').textContent = 'Play'; }
+$('swPlay').onclick = () => {
+  if (swTimer) return stopSweep();
+  if (reduce) { sweep = T - 1; return updateSweep(); }
+  if (sweep == null || sweep >= T - 1) sweep = -1;
+  $('swPlay').textContent = 'Pause';
+  swTimer = setInterval(() => { sweep++; updateSweep(); if (sweep >= T - 1) stopSweep(); }, 450);
+};
+$('swPrev').onclick = () => { stopSweep(); sweep = Math.max(0, (sweep ?? 0) - 1); updateSweep(); };
+$('swNext').onclick = () => { stopSweep(); sweep = ((sweep ?? -1) + 1) % T; updateSweep(); };
+$('swStep').oninput = (e) => { stopSweep(); sweep = +e.target.value; updateSweep(); };
+$('swOff').onclick = () => { stopSweep(); sweep = null; updateSweep(); };
+
+// ---------- camera presets and layout ----------
+const GROUPS = ['embedding', 'attention', 'MLP', 'head'];
+// theta, phi, padding. Depth sends 36 blocks away from you, so its whole view looks from the side, where the chain runs
+// across the screen; a group is seen from three-quarters, as on cnn-3d.
+const CAM = { side: { whole: [0.3, 1.2, 1.03], group: [0.45, 1.12, 1.06] }, depth: { whole: [1.25, 1.15, 1.04], group: [0.9, 1.1, 1.06] } };
+let preset = 'whole';
+function camPreset(name) {
+  preset = name; const ids = name === 'whole' ? ORDER : VIT_BLOCKS.filter((b) => b.group === name).map((b) => b.key);
+  const [theta, phi, pad] = CAM[view.layout][name === 'whole' ? 'whole' : 'group'];
+  view.fit(ids, theta, phi, pad);
+  document.querySelectorAll('.cams button[data-cam]').forEach((x) => x.classList.toggle('sel', x.dataset.cam === name));
+}
+document.querySelectorAll('.cams button[data-cam]').forEach((x) => { x.onclick = () => camPreset(x.dataset.cam); });
+function setLayout(l) {
+  view.layout = l; try { localStorage.setItem(LAYOUT_KEY, l); } catch { /* storage blocked */ }
+  view.blockById('bp').dx = l === 'side' ? 1.5 : 0; // side by side a block starts at its left edge, in depth it is centred
+  $('laySide').classList.toggle('sel', l === 'side'); $('layDepth').classList.toggle('sel', l === 'depth');
+  view.refresh(); drawFrames(); updateHighlights(); updateSweep(); camPreset(preset);
+}
+$('laySide').onclick = () => setLayout('side'); $('layDepth').onclick = () => setLayout('depth');
+view.onPick((hit) => { const p = probeOf(hit); if (JSON.stringify(p) !== JSON.stringify(hover)) { hover = p; updateHighlights(); } });
+view.onClick((hit) => { pinned = probeOf(hit); hover = null; updateHighlights(); });
+
+// ---------- compute ----------
+function compute() {
+  if (!img) return;
+  S = forward(W(), img, { position, order }); scales = {};
+  view.refresh(); updateHighlights(); updateSweep();
+  const words = weightWords({ S, trained: useTrained && !!wTrained, meta, position, order, data });
+  $('wsrc').innerHTML = words.src; $('wnote').textContent = words.note;
+}
+
+// ---------- controls ----------
+function setDigit() { if (!data) return; const list = byClass[pick.cls], i = list[pick.n % list.length]; img = image(data.test, i); $('dlab').textContent = `held-out digit ${i}, a ${pick.cls}`; }
+function syncControls() {
+  [...$('digits').children].forEach((b, c) => b.classList.toggle('sel', c === pick.cls));
+  $('wTr').classList.toggle('sel', useTrained && !!wTrained); $('wRa').classList.toggle('sel', !(useTrained && wTrained)); $('wTr').disabled = !wTrained;
+  $('pOn').classList.toggle('sel', position); $('pOff').classList.toggle('sel', !position); $('unshuf').disabled = !order;
+}
+for (let c = 0; c < NC; c++) { const b = document.createElement('button'); b.textContent = c; b.onclick = () => { pick = { cls: c, n: 0 }; setDigit(); syncControls(); compute(); }; $('digits').append(b); }
+$('another').onclick = () => { pick.n++; setDigit(); compute(); };
+const on = (id, f) => { $(id).onclick = () => { f(); syncControls(); compute(); }; };
+on('wTr', () => { useTrained = true; }); on('wRa', () => { useTrained = false; });
+on('pOn', () => { position = true; }); on('pOff', () => { position = false; });
+on('shuf', () => { order = shuffledOrder(T, ++shuffles); }); on('unshuf', () => { order = null; });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { drawFrames(); compute(); });
+
+// ---------- start ----------
+async function start() {
+  installTerms({ selectors: '.lede, .hint:not(#swHint):not(#wnote):not(#wsrc):not(#dlab)', tip: $('tip'), gloss: $('gloss'), terms: VIT_TERMS });
+  const got = await loadDigitsAndWeights(document.querySelector('h1'), '../data/mnist16.bin', '../models/vit16.json');
+  if (!got) { document.querySelectorAll('.panel button, .panel input').forEach((x) => { x.disabled = true; }); return; }
+  ({ data, byClass, wTrained, meta } = got); useTrained = !!wTrained;
+  setDigit(); syncControls();
+  S = forward(W(), img, { position, order });
+  view.resize(); view.setBlocks(defs()); setLayout(layout); compute(); view.start();
+}
+const ready = start();
+</script>
+</body>
+</html>
