@@ -259,13 +259,13 @@ const on = (id, f) => { $(id).onclick = () => { f(); syncControls(); compute(); 
 on('wTr', () => { useTrained = true; }); on('wRa', () => { useTrained = false; });
 on('pOn', () => { position = true; }); on('pOff', () => { position = false; });
 on('shuf', () => { order = shuffledOrder(T, ++shuffles); }); on('unshuf', () => { order = null; });
-matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { drawFrames(); compute(); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (view.blocks.length) { drawFrames(); compute(); } });
 
 // ---------- start ----------
 async function start() {
   installTerms({ selectors: '.lede, .hint:not(#swHint):not(#wnote):not(#wsrc):not(#dlab)', tip: $('tip'), gloss: $('gloss'), terms: VIT_TERMS });
   const got = await loadDigitsAndWeights(document.querySelector('h1'), '../data/mnist16.bin', '../models/vit16.json');
-  if (!got) { document.querySelectorAll('.panel button, .panel input').forEach((x) => { x.disabled = true; }); return; }
+  if (!got) { document.querySelectorAll('button, input').forEach((x) => { x.disabled = true; }); return; } // no digits, no scene: every control is off, the presets and the layout switch too
   ({ data, byClass, wTrained, meta } = got); useTrained = !!wTrained;
   setDigit(); syncControls();
   S = forward(W(), img, { position, order });
