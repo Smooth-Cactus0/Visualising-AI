@@ -9,7 +9,8 @@
 // `gapZ` on a block overrides the depth gap after it; `dx`, `dy` shift a block within its row (a grid of small blocks);
 // a `ghost` block holds its place in the layout without being built. `place(defs)` lays blocks out without building them.
 // Used only by vit-3d/: `strengthBox` and `strengthLine` (graded green), `fit` (frame a set of blocks), `snap` (jump the
-// camera to its goal) and `onClick` (a click without a drag).
+// camera to its goal and draw), `onClick` (a plain left click without a drag) and `clear(group)` (free the group's
+// geometry, then empty it; direct children only).
 import { isDark, cssVar } from './grid.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
