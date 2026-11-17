@@ -74,7 +74,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 <main>
 <nav class="crumb"><a href="../">Visualising AI</a> › Vision Transformer, 3D explorer</nav>
 <h1>ViT explorer, in 3D</h1>
-<p class="lede">The toy Vision Transformer of the <a href="../vit/">explorer</a>, drawn as blocks of cubes, one cube per number. Each token sits where its patch was: the 16 tokens make a 4×4 block whose depth is the token's 8 numbers, the shape of a CNN feature map. Each head's attention map is a slab of 16 little 4×4 maps, one at each token's place, showing where in the image that token looks. Cube size is magnitude and colour is sign (blue negative, orange positive). Drag to orbit, scroll to zoom, right-drag to pan. Hover a cube to see what it is computed from; click to pin it while you turn the view.</p>
+<p class="lede">The toy Vision Transformer of the <a href="../vit/">2D explorer</a>, drawn as blocks of cubes, one cube per number. Each token sits where its patch was: the 16 tokens make a 4×4 block whose depth is the token's 8 numbers, the shape of a CNN feature map. Each head's attention map is a slab of 16 little 4×4 maps, one at each token's place, showing where in the image that token looks. Cube size is magnitude and colour is sign (blue negative, orange positive). Drag to orbit, scroll to zoom, right-drag to pan. Hover a cube to see what it is computed from; click to pin it while you turn the view.</p>
 <div class="wrap">
   <div>
     <div id="view">
@@ -135,6 +135,7 @@ const value = (t, r, c) => tensor(t, S, W())[r][c];
 
 // ---------- the scene (blocks drawn by ../ui/blocks3d.js; which tensor each block draws, in ../core/vit3d.js) ----------
 let layout = 'side'; try { layout = localStorage.getItem(LAYOUT_KEY) || 'side'; } catch { /* storage blocked */ }
+if (layout !== 'depth') layout = 'side';
 const view = createBlockView($('view'), { explode: 0.5, layout, gapX: 5, gapZ: 9, lateral: $('lateral'), ease: reduce ? 1 : 0.12, declutter: true });
 const frames = new THREE.Group(); view.scene.add(frames);
 const frameMat = new THREE.LineBasicMaterial({ color: 0x2457a8, transparent: true, opacity: 0.6 });
@@ -164,7 +165,7 @@ function defs() {
 // The learned weights in accent frames, as on the CNN training page's 3D view: a matrix and its bias share one frame.
 const FRAMED = [['Wp', 'bp'], ['pos'], ['ln1'], ['Wq', 'bq'], ['Wk', 'bk'], ['Wv', 'bv'], ['Wo', 'bo'], ['ln2'], ['W1', 'b1'], ['W2', 'b2'], ['lnf'], ['Wh', 'bh']];
 function drawFrames() {
-  frames.clear(); frameMat.color.set(getComputedStyle(document.documentElement).getPropertyValue('--accent').trim());
+  view.clear(frames); frameMat.color.set(getComputedStyle(document.documentElement).getPropertyValue('--accent').trim());
   for (const ids of FRAMED) {
     const bx = new THREE.Box3(); for (const id of ids) { const b = view.blockById(id); bx.union(view.bounds(b, 0, b.rows - 1, 0, b.cols - 1, 0, b.chans - 1)); }
     bx.expandByScalar(0.4); const size = bx.getSize(new THREE.Vector3());
@@ -177,7 +178,7 @@ const probeOf = (hit) => (hit ? cubeToCell(hit.block.id, hit.r, hit.c, hit.ch) :
 const shown = () => hover || pinned;
 function tokenCentre(key, j) { const b = view.blockById(key); return view.voxelPos(b, j >> 2, j & 3, 0).add(view.voxelPos(b, j >> 2, j & 3, b.chans - 1)).multiplyScalar(0.5); }
 function updateHighlights() {
-  view.hl.clear(); const p = shown();
+  view.clear(view.hl); const p = shown();
   if (!p || !S) { $('readout').textContent = 'Hover a cube.'; return; }
   const trace = vitTrace(S, p);
   for (const x of traceBoxes(trace)) view.strengthBox(view.blockById(x.key), x.r0, x.r1, x.c0, x.c1, x.ch0, x.ch1, x.s, view.hl);
@@ -191,7 +192,7 @@ function updateHighlights() {
 
 // ---------- the patch sweep (yellow) ----------
 function updateSweep() {
-  view.aux.clear(); const { swFill, swEdge, swOut, swLine } = view.mats;
+  view.clear(view.aux); const { swFill, swEdge, swOut, swLine } = view.mats;
   $('swStep').value = sweep ?? 0;
   if (sweep == null || !S) { $('swHint').textContent = 'The patch embedding is a convolution whose kernel is as big as its stride: 8 kernels of 4×4 jump 4 pixels at a time, and each patch becomes one token of 8 numbers.'; return; }
   const s = sweep, pr = s >> 2, pc = s & 3, dg = view.blockById('digit'), kb = view.blockById('Wp'), xb = view.blockById('xp');

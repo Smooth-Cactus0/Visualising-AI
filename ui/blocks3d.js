@@ -113,6 +113,7 @@ export function createBlockView(viewEl, { explode = 0.7, layout = 'side', gapX =
 
   // ---- graded highlights: a box or a line whose opacity is a strength from 0 to 1 ----
   const strengthMats = new Map();
+  let unitBox = null, unitEdges = null; // shared by every strengthBox, never disposed; made on first use so the CNN pages (which never call it) draw no extra uuids from a seeded Math.random
   function strengthMat(kind, s) { // materials shared per twentieth of strength
     const q = Math.round(clamp(s, 0, 1) * 20), id = kind + q; let m = strengthMats.get(id);
     if (!m) { m = kind === 'fill' ? new THREE.MeshBasicMaterial({ color: 0x3fae4b, transparent: true, opacity: 0.05 + 0.3 * q / 20, depthWrite: false })
@@ -121,9 +122,10 @@ export function createBlockView(viewEl, { explode = 0.7, layout = 'side', gapX =
   /** A green box over cells r0..r1 × c0..c1 of slices ch0..ch1 of block b, filled as strongly as s; outlined when s is 1. */
   function strengthBox(b, r0, r1, c0, c1, ch0, ch1, s, group) {
     const p0 = voxelPos(b, r0, c0, ch0), p1 = voxelPos(b, r1, c1, ch1);
-    const g = new THREE.BoxGeometry(Math.abs(p1.x - p0.x) + 1.16, Math.abs(p1.y - p0.y) + 1.16, Math.abs(p1.z - p0.z) + 1.16);
-    const m = new THREE.Mesh(g, strengthMat('fill', s)); m.position.set((p0.x + p1.x) / 2, (p0.y + p1.y) / 2, (p0.z + p1.z) / 2); group.add(m);
-    if (s >= 0.999) { const e = new THREE.LineSegments(new THREE.EdgesGeometry(g), mats.hlEdge); e.position.copy(m.position); group.add(e); } }
+    if (!unitBox) { unitBox = new THREE.BoxGeometry(1, 1, 1); unitEdges = new THREE.EdgesGeometry(unitBox); }
+    const m = new THREE.Mesh(unitBox, strengthMat('fill', s)); m.scale.set(Math.abs(p1.x - p0.x) + 1.16, Math.abs(p1.y - p0.y) + 1.16, Math.abs(p1.z - p0.z) + 1.16);
+    m.position.set((p0.x + p1.x) / 2, (p0.y + p1.y) / 2, (p0.z + p1.z) / 2); group.add(m);
+    if (s >= 0.999) { const e = new THREE.LineSegments(unitEdges, mats.hlEdge); e.position.copy(m.position); e.scale.copy(m.scale); group.add(e); } }
   /** A green line from p to q (THREE.Vector3), as strong as s. */
   function strengthLine(p, q, s, group) { group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([p, q]), strengthMat('line', s))); }
 
@@ -185,13 +187,13 @@ export function createBlockView(viewEl, { explode = 0.7, layout = 'side', gapX =
   const cv3 = renderer.domElement;
   cv3.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY, btn: e.button, shift: e.shiftKey, moved: false, travel: 0 }; cv3.setPointerCapture(e.pointerId); if (clickCb) pick(e); });
   cv3.addEventListener('pointermove', (e) => {
-    if (drag) { const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY; drag.travel += Math.abs(dx) + Math.abs(dy); if (drag.travel > 4) drag.moved = true;
+    if (drag) { const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY; drag.travel += Math.abs(dx) + Math.abs(dy); if (drag.travel > 4 && !drag.moved) { drag.moved = true; if (clickCb) { lastKey = null; lastHit = null; if (pickCb) pickCb(null); } } // an orbit forgets the cube it started on
       if (drag.btn === 2 || drag.shift) { const right = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0), up = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 1); const k = cam.dist * 0.0016;
         cam.target.addScaledVector(right, -dx * k).addScaledVector(up, dy * k); }
       else { cam.theta -= dx * 0.006; cam.phi = clamp(cam.phi - dy * 0.006, 0.15, Math.PI - 0.15); }
       Object.assign(camGoal, { theta: cam.theta, phi: cam.phi, dist: cam.dist }); camGoal.target.copy(cam.target); return; }
     pick(e); });
-  cv3.addEventListener('pointerup', () => { if (drag && !drag.moved && clickCb) clickCb(lastHit); drag = null; });
+  cv3.addEventListener('pointerup', () => { if (drag && !drag.moved && drag.btn === 0 && !drag.shift && clickCb) clickCb(lastHit); drag = null; });
   cv3.addEventListener('pointerleave', () => { drag = null; lastHit = null; if (lastKey !== null) { lastKey = null; if (pickCb) pickCb(null); } });
   cv3.addEventListener('contextmenu', (e) => e.preventDefault());
   cv3.addEventListener('wheel', (e) => { e.preventDefault();
@@ -218,6 +220,6 @@ export function createBlockView(viewEl, { explode = 0.7, layout = 'side', gapX =
 
   Object.assign(view, { setBlocks, place, refresh, blockById, voxelPos, bounds, flowRange, flowAxis, centerOf, boxAt, boxSpanZ, connect, setGoal, cam, goal: camGoal, resize,
     strengthBox, strengthLine, fit, snap, onClick: (cb) => { clickCb = cb; },
-    onPick: (cb) => { pickCb = cb; }, start: () => { running = true; applyCam(); loop(); }, clear: (group) => group.clear() });
+    onPick: (cb) => { pickCb = cb; }, start: () => { running = true; applyCam(); loop(); }, clear: (group) => { for (const o of group.children) if (o.geometry && o.geometry !== unitBox && o.geometry !== unitEdges) o.geometry.dispose(); group.clear(); } });
   return view;
 }

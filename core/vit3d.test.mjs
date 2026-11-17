@@ -56,7 +56,7 @@ for (const [t, arr] of Object.entries(tz)) {
     const cube = cellToCube(t, Math.floor(q / C), q % C);
     const hits = bz.filter((x) => x.key === cube.key && cube.r >= x.r0 && cube.r <= x.r1 && cube.c >= x.c0 && cube.c <= x.c1 && cube.ch >= x.ch0 && cube.ch <= x.ch1);
     if (s > 0) assert(hits.length === 1 && Math.abs(hits[0].s - s) < 1e-6, `${t}[${q}] covered once at ${s}`);
-    else assert(hits.length === 0 || cube.key === 'att', `${t}[${q}] unlit and uncovered`); // att0 and att1 share a block, so each other's cells may be lit
+    else assert(hits.length === 0, `${t}[${q}] unlit and uncovered`);
   });
 }
 console.log(`traceBoxes: before attention ${bq.length} boxes, after attention ${bz.length}; every lit cell covered once`);
