@@ -135,12 +135,12 @@ footer p{margin:0 0 6px;max-width:90ch}
 <header>
   <h1>Visualising AI</h1>
   <p class="lede">Interactive explorers for deep-learning architectures. Each one takes the boxes of an architecture diagram and shows what they <b>compute</b>: every cell, kernel, weight and gradient can be hovered, and the arithmetic is written out. The networks are small on purpose, so that every number fits on screen.</p>
-  <p class="lede">The convolutional network and the Vision Transformer are built, each with an explorer and a training page. Next: U-Net, CoAtNet and ConvNeXt.</p>
+  <p class="lede">The convolutional network and the Vision Transformer are built, each with a 2D explorer, a 3D explorer and a training page. Next: U-Net, CoAtNet and ConvNeXt.</p>
 </header>
 
 <nav class="archs" aria-label="Architectures">
   <a href="#cnn">CNN <span class="badge live">3 pages</span></a>
-  <a href="#vit">Vision Transformer <span class="badge live">2 pages</span></a>
+  <a href="#vit">Vision Transformer <span class="badge live">3 pages</span></a>
   <a href="#unet">U-Net <span class="badge planned">planned</span></a>
   <a href="#coatnet">CoAtNet <span class="badge planned">planned</span></a>
   <a href="#convnext">ConvNeXt <span class="badge planned">planned</span></a>
@@ -150,7 +150,7 @@ footer p{margin:0 0 6px;max-width:90ch}
   <h2>How to read every page</h2>
   <div class="keys">
     <div><i class="y"></i><span><b style="color:var(--ink);font-weight:500">Yellow</b> is the window being computed: a kernel's, as it moves forward over its input, or on the ViT page one attention score.</span></div>
-    <div><i class="g"></i><span><b style="color:var(--ink);font-weight:500">Green</b> traces backwards: what a hovered cell sees, or the two sources of a weight's gradient. On the ViT page, after attention, its strength is the attention weight.</span></div>
+    <div><i class="g"></i><span><b style="color:var(--ink);font-weight:500">Green</b> traces backwards: what a hovered cell sees, or the two sources of a weight's gradient. On the ViT pages, after attention, its strength is the attention weight.</span></div>
     <div><i class="d"></i><span><b style="color:var(--ink);font-weight:500">Blue to orange</b> is negative to positive. In 3D, cube size is magnitude.</span></div>
     <div><i class="t">term</i><span>A dotted word has its definition on hover; every page ends with its Terms.</span></div>
   </div>
@@ -178,14 +178,16 @@ footer p{margin:0 0 6px;max-width:90ch}
   <div class="fig"><svg data-arch="vit" viewBox="0 0 440 150" role="img" aria-label="An image cut into 16 patches becomes a row of tokens; in the encoder every token attends to every other; the tokens are averaged and give 10 class probabilities."></svg>
     <div class="cap">Patches → tokens → attention, every token to every other → average → 10 classes. One token's attention in green.</div></div>
   <div>
-    <div class="head"><span class="num">02</span><h2>Vision Transformer (ViT)</h2><span class="badge live">2 pages</span></div>
+    <div class="head"><span class="num">02</span><h2>Vision Transformer (ViT)</h2><span class="badge live">3 pages</span></div>
     <p class="def">Cut the image into patches, turn each patch into a vector called a token, and let every token look at every other one through attention.</p>
     <p class="why">Where a convolution's view grows a few pixels per layer, attention sees the whole image from the first layer and learns where to look. The price: its cost grows with the square of the number of patches, which is why patches are large.</p>
     <p class="builds">Builds on the CNN pages: stride, kernels, softmax.</p>
   </div>
     <div class="cards">
-      <a class="card" href="vit/"><b><svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><g class="k-act"><rect class="f" x="2" y="2" width="22" height="22" rx="2"/></g><rect x="13" y="7.5" width="5.5" height="5.5" fill="var(--hl2)"/><rect x="7.5" y="2" width="5.5" height="5.5" fill="var(--hl2)" opacity=".55"/><rect x="2" y="18.5" width="5.5" height="5.5" fill="var(--hl2)" opacity=".3"/><path class="grid" d="M7.5 2v22M13 2v22M18.5 2v22M2 7.5h22M2 13h22M2 18.5h22"/></svg>Explorer</b>
+      <a class="card" href="vit/"><b><svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><g class="k-act"><rect class="f" x="2" y="2" width="22" height="22" rx="2"/></g><rect x="13" y="7.5" width="5.5" height="5.5" fill="var(--hl2)"/><rect x="7.5" y="2" width="5.5" height="5.5" fill="var(--hl2)" opacity=".55"/><rect x="2" y="18.5" width="5.5" height="5.5" fill="var(--hl2)" opacity=".3"/><path class="grid" d="M7.5 2v22M13 2v22M18.5 2v22M2 7.5h22M2 13h22M2 18.5h22"/></svg>2D explorer</b>
         <span>Patches become tokens, position is added, one attention head is written out score by score, then the MLP, the residuals and the average. Trained weights; hover any value to see what it reads.</span><em>Open →</em></a>
+      <a class="card" href="vit-3d/"><b><svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><g class="k-act"><path class="t" d="M3 9L9 4H24L18 9Z"/><path class="s" d="M18 9L24 4V18L18 23Z"/><rect class="f" x="3" y="9" width="15" height="14"/></g><path class="grid" d="M6.75 9v14M10.5 9v14M14.25 9v14M3 12.5h15M3 16h15M3 19.5h15"/><rect x="10.5" y="12.5" width="3.75" height="3.5" fill="var(--hl2)"/></svg>3D explorer</b>
+        <span>The same network as blocks of cubes: each token sits where its patch was, and each token's attention is a 4×4 map at its place. Hover to trace, click to pin while you turn the view.</span><em>Open →</em></a>
       <a class="card" href="vit-train/"><b><svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><path d="M3 4C7 5 8 15 12 17S20 20 23 21" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round"/><path d="M3 23H23M3 3V23" stroke="var(--ink2)" stroke-width="1.2" fill="none"/></svg>Training</b>
         <span>One step in full, the backward pass through attention a stage at a time, then thousands of steps; then a race against the CNN on 100 to 3,000 digits, where the CNN's locality wins when data is scarce.</span><em>Open →</em></a>
     </div>
