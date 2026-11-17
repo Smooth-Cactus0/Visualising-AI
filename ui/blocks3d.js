@@ -8,6 +8,8 @@
 // A block with `at: <id>` takes that block's place along the flow, so a row can line up under another;
 // `gapZ` on a block overrides the depth gap after it; `dx`, `dy` shift a block within its row (a grid of small blocks);
 // a `ghost` block holds its place in the layout without being built. `place(defs)` lays blocks out without building them.
+// Used only by vit-3d/: `strengthBox` and `strengthLine` (graded green), `fit` (frame a set of blocks), `snap` (jump the
+// camera to its goal) and `onClick` (a click without a drag).
 import { isDark, cssVar } from './grid.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -109,6 +111,22 @@ export function createBlockView(viewEl, { explode = 0.7, layout = 'side', gapX =
     const m = new THREE.Mesh(g, fillMat); m.position.set((p0.x + p1.x) / 2, (p0.y + p1.y) / 2, (p0.z + p1.z) / 2); group.add(m);
     const e = new THREE.LineSegments(new THREE.EdgesGeometry(g), edgeMat); e.position.copy(m.position); group.add(e); }
 
+  // ---- graded highlights: a box or a line whose opacity is a strength from 0 to 1 ----
+  const strengthMats = new Map();
+  function strengthMat(kind, s) { // materials shared per twentieth of strength
+    const q = Math.round(clamp(s, 0, 1) * 20), id = kind + q; let m = strengthMats.get(id);
+    if (!m) { m = kind === 'fill' ? new THREE.MeshBasicMaterial({ color: 0x3fae4b, transparent: true, opacity: 0.05 + 0.3 * q / 20, depthWrite: false })
+      : new THREE.LineBasicMaterial({ color: 0x2e8f3a, transparent: true, opacity: 0.15 + 0.85 * q / 20 }); strengthMats.set(id, m); }
+    return m; }
+  /** A green box over cells r0..r1 × c0..c1 of slices ch0..ch1 of block b, filled as strongly as s; outlined when s is 1. */
+  function strengthBox(b, r0, r1, c0, c1, ch0, ch1, s, group) {
+    const p0 = voxelPos(b, r0, c0, ch0), p1 = voxelPos(b, r1, c1, ch1);
+    const g = new THREE.BoxGeometry(Math.abs(p1.x - p0.x) + 1.16, Math.abs(p1.y - p0.y) + 1.16, Math.abs(p1.z - p0.z) + 1.16);
+    const m = new THREE.Mesh(g, strengthMat('fill', s)); m.position.set((p0.x + p1.x) / 2, (p0.y + p1.y) / 2, (p0.z + p1.z) / 2); group.add(m);
+    if (s >= 0.999) { const e = new THREE.LineSegments(new THREE.EdgesGeometry(g), mats.hlEdge); e.position.copy(m.position); group.add(e); } }
+  /** A green line from p to q (THREE.Vector3), as strong as s. */
+  function strengthLine(p, q, s, group) { group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([p, q]), strengthMat('line', s))); }
+
   // ---- labels ----
   const labelEls = new Map();
   function syncLabels() {
@@ -130,6 +148,28 @@ export function createBlockView(viewEl, { explode = 0.7, layout = 'side', gapX =
   // ---- orbit camera ----
   const cam = { theta: 0.55, phi: 1.1, dist: 80, target: new THREE.Vector3(40, 0, -4) };
   const camGoal = { ...cam, target: cam.target.clone() };
+  /** Frame blocks (ids or blocks) seen from theta, phi: the distance that brings every corner inside the view with a
+   *  margin `pad` and room above the top blocks for their two-line labels, then the target that centres them. */
+  function fit(list, theta, phi, pad = 1.04) {
+    const bs = list.map((x) => (typeof x === 'string' ? blockById(x) : x)).filter(Boolean); if (!bs.length) return;
+    const corners = [], box = new THREE.Box3();
+    for (const b of bs) { const bx = bounds(b, 0, b.rows - 1, 0, b.cols - 1, 0, b.chans - 1); box.union(bx);
+      for (const x of [bx.min.x, bx.max.x]) for (const y of [bx.min.y, bx.max.y]) for (const z of [bx.min.z, bx.max.z]) corners.push(new THREE.Vector3(x, y, z)); }
+    const c2 = new THREE.PerspectiveCamera(camera.fov, camera.aspect, 0.1, 5000), q = new THREE.Vector3(), head = 2 * 44 / Math.max(200, viewEl.clientHeight);
+    const dir = new THREE.Vector3(Math.sin(phi) * Math.sin(theta), Math.cos(phi), Math.sin(phi) * Math.cos(theta)), target = box.getCenter(new THREE.Vector3());
+    const extent = (dist) => { c2.position.copy(target).addScaledVector(dir, dist); c2.lookAt(target); c2.updateMatrixWorld(); let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, front = true;
+      for (const p of corners) { q.copy(p).project(c2); if (q.z >= 1) front = false; x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y); }
+      return { x0, x1, y0, y1: y1 + head, front }; };
+    let dist = 100;
+    for (let pass = 0; pass < 4; pass++) { // fit the distance, slide the target to centre the projection, again
+      let lo = 1, hi = 3000; for (let k = 0; k < 40; k++) { const mid = (lo + hi) / 2, e = extent(mid); if (e.front && Math.max(-e.x0, e.x1, -e.y0, e.y1) * pad <= 1) hi = mid; else lo = mid; } dist = hi;
+      const e = extent(dist), halfH = Math.tan((camera.fov / 2) * Math.PI / 180) * dist, halfW = halfH * c2.aspect;
+      target.addScaledVector(new THREE.Vector3().setFromMatrixColumn(c2.matrixWorld, 0), (e.x0 + e.x1) / 2 * halfW).addScaledVector(new THREE.Vector3().setFromMatrixColumn(c2.matrixWorld, 1), (e.y0 + e.y1) / 2 * halfH);
+    }
+    setGoal({ theta, phi, dist, target });
+  }
+  /** Jump the camera to its goal and draw that frame now, labels included (checks read the canvas straight after). */
+  function snap() { cam.theta = camGoal.theta; cam.phi = camGoal.phi; cam.dist = camGoal.dist; cam.target.copy(camGoal.target); draw(); }
   function applyCam() { const t = cam.target; camera.position.set(t.x + cam.dist * Math.sin(cam.phi) * Math.sin(cam.theta), t.y + cam.dist * Math.cos(cam.phi), t.z + cam.dist * Math.sin(cam.phi) * Math.cos(cam.theta)); camera.lookAt(t); }
   function flowRange() { const a = flowAxis(); const bx = new THREE.Box3(); view.blocks.forEach((b) => bx.union(bounds(b, 0, b.rows - 1, 0, b.cols - 1, 0, b.chans - 1))); return [bx.min[a], bx.max[a], bx]; }
   function centerOf(ids) { const bx = new THREE.Box3(); ids.forEach((id) => { const b = blockById(id); bx.union(bounds(b, 0, b.rows - 1, 0, b.cols - 1, 0, b.chans - 1)); }); return bx.getCenter(new THREE.Vector3()); }
@@ -143,29 +183,29 @@ export function createBlockView(viewEl, { explode = 0.7, layout = 'side', gapX =
   function syncLateral() { if (!lateral || latDrag) return; const [lo, hi] = flowRange(); const a = flowAxis(); const t = flowSign() > 0 ? (cam.target[a] - lo) / (hi - lo) : (hi - cam.target[a]) / (hi - lo); lateral.value = Math.round(clamp(t, 0, 1) * 1000); }
   let drag = null;
   const cv3 = renderer.domElement;
-  cv3.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY, btn: e.button, shift: e.shiftKey, moved: false }; cv3.setPointerCapture(e.pointerId); });
+  cv3.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY, btn: e.button, shift: e.shiftKey, moved: false, travel: 0 }; cv3.setPointerCapture(e.pointerId); if (clickCb) pick(e); });
   cv3.addEventListener('pointermove', (e) => {
-    if (drag) { const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY; if (Math.abs(dx) + Math.abs(dy) > 0) drag.moved = true;
+    if (drag) { const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY; drag.travel += Math.abs(dx) + Math.abs(dy); if (drag.travel > 4) drag.moved = true;
       if (drag.btn === 2 || drag.shift) { const right = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0), up = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 1); const k = cam.dist * 0.0016;
         cam.target.addScaledVector(right, -dx * k).addScaledVector(up, dy * k); }
       else { cam.theta -= dx * 0.006; cam.phi = clamp(cam.phi - dy * 0.006, 0.15, Math.PI - 0.15); }
       Object.assign(camGoal, { theta: cam.theta, phi: cam.phi, dist: cam.dist }); camGoal.target.copy(cam.target); return; }
     pick(e); });
-  cv3.addEventListener('pointerup', () => { drag = null; });
-  cv3.addEventListener('pointerleave', () => { drag = null; if (lastKey !== null) { lastKey = null; if (pickCb) pickCb(null); } });
+  cv3.addEventListener('pointerup', () => { if (drag && !drag.moved && clickCb) clickCb(lastHit); drag = null; });
+  cv3.addEventListener('pointerleave', () => { drag = null; lastHit = null; if (lastKey !== null) { lastKey = null; if (pickCb) pickCb(null); } });
   cv3.addEventListener('contextmenu', (e) => e.preventDefault());
   cv3.addEventListener('wheel', (e) => { e.preventDefault();
     if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) { const a = flowAxis(); const [lo, hi] = flowRange(); const nv = clamp(cam.target[a] + flowSign() * e.deltaX * 0.05, lo, hi); cam.target[a] = nv; camGoal.target[a] = nv; return; }
     cam.dist = clamp(cam.dist * Math.exp(e.deltaY * 0.0012), 6, 300); camGoal.dist = cam.dist; }, { passive: false });
 
   // ---- picking ----
-  let pickCb = null, lastKey = null;
+  let pickCb = null, lastKey = null, clickCb = null, lastHit = null;
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
   function pick(e) { const r = cv3.getBoundingClientRect(); ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(ndc, camera); const hits = ray.intersectObjects(net.children);
     let hit = null; if (hits.length) { const h = hits[0]; const b = h.object.userData.block; const id = h.instanceId; const per = b.rows * b.cols; const ch = Math.floor(id / per), rem = id % per; hit = { block: b, r: Math.floor(rem / b.cols), c: rem % b.cols, ch }; }
     const key = hit ? `${hit.block.id}:${hit.r}:${hit.c}:${hit.ch}` : null;
-    if (key !== lastKey) { lastKey = key; if (pickCb) pickCb(hit); } }
+    lastHit = hit; if (key !== lastKey) { lastKey = key; if (pickCb) pickCb(hit); } }
 
   // ---- loop ----
   function resize() { const w = viewEl.clientWidth, h = viewEl.clientHeight; if (!w || !h) return; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); }
@@ -173,9 +213,11 @@ export function createBlockView(viewEl, { explode = 0.7, layout = 'side', gapX =
   let running = false;
   function loop() { if (!running) return; // ease camera toward goal
     cam.theta += (camGoal.theta - cam.theta) * ease; cam.phi += (camGoal.phi - cam.phi) * ease; cam.dist += (camGoal.dist - cam.dist) * ease; cam.target.lerp(camGoal.target, ease);
-    applyCam(); renderer.setClearColor(new THREE.Color(cssVar('--scene'))); renderer.render(scene, camera); syncLabels(); syncLateral(); requestAnimationFrame(loop); }
+    draw(); requestAnimationFrame(loop); }
+  function draw() { applyCam(); renderer.setClearColor(new THREE.Color(cssVar('--scene'))); renderer.render(scene, camera); syncLabels(); syncLateral(); }
 
   Object.assign(view, { setBlocks, place, refresh, blockById, voxelPos, bounds, flowRange, flowAxis, centerOf, boxAt, boxSpanZ, connect, setGoal, cam, goal: camGoal, resize,
+    strengthBox, strengthLine, fit, snap, onClick: (cb) => { clickCb = cb; },
     onPick: (cb) => { pickCb = cb; }, start: () => { running = true; applyCam(); loop(); }, clear: (group) => group.clear() });
   return view;
 }
